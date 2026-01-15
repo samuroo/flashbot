@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 
+
 # ---- Paths (works no matter where you run from) ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(BASE_DIR, "yolo-fastest-1.1.cfg")
@@ -26,7 +27,11 @@ picam2 = Picamera2()
 picam2.configure(picam2.create_preview_configuration(main={"size": (640, 360), "format": "RGB888"}))
 picam2.start()
 
-def detect_largest_person(img_bgr, conf_th=0.5, nms_th=0.4):
+def detect_largest_person(img_bgr=None, conf_th=0.5, nms_th=0.4, debug=False):
+    if not debug:
+        frame_rgb = picam2.capture_array()
+        img_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
     h, w = img_bgr.shape[:2]
     blob = cv2.dnn.blobFromImage(img_bgr, 1/255.0, (416, 416), swapRB=True, crop=False)
     net.setInput(blob)
@@ -75,7 +80,7 @@ if __name__ == "__main__":
             frame_rgb = picam2.capture_array()
             img = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
-            det = detect_largest_person(img)
+            det = detect_largest_person(img, debug=True)
             if det is None:
                 print("People: 0")
             else:
