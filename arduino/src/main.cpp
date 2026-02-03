@@ -4,7 +4,8 @@
 #include "inputs.h"
 #include "fsm.h"
 #include "servo.h"
-#include "leds.h"
+// #include "leds.h"
+#include "neo_pxl.h"
 
 static bool DEBUG_WITHOUT_PI = false;
 
@@ -13,6 +14,7 @@ void setup() {
   Inputs::begin();
   Fsm::begin(DEBUG_WITHOUT_PI);
   Servo::begin();
+  NeoPixel::begin();
   Serial.println("Setup Complete");
 }
 

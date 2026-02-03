@@ -1,4 +1,3 @@
-
 #include "leds.h"
 
 static const uint8_t LED_PIN = 6;
