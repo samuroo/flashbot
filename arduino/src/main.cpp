@@ -28,5 +28,7 @@ void loop() {
   // if (ev.limit_bumped_right) Serial.println("RIGHT BUMPED");
   // if (ev.limit_released_right) Serial.println("RIGHT RELEASED");
 
+  if (ev.hall_left || ev.hall_right) Servo::sync_servos(ev.hall_left, ev.hall_right, micros());
+
   Fsm::step(ev);
 }
