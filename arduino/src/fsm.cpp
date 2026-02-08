@@ -17,7 +17,6 @@ enum class State {
 // PRIVATE VARIABLES
 static State state = State::IDLE;
 static unsigned long state_enter_ms = 0;
-static int16_t speed = 400;
 static bool DEBUG = false;
 static bool left_bumped = false;
 static bool right_bumped = false;
@@ -61,7 +60,7 @@ void step(const Events& ev) {
     case State::IDLE_DEBUG: {
       if (ev.hall_left) {
         Serial.println("FSM: IDLE_DEBUG -> WANDER");
-        Servo::forward(speed);
+        Servo::forward();
         enter(State::WANDER);
       }
       break;
@@ -75,7 +74,7 @@ void step(const Events& ev) {
         if (msg == "PI_ON") {
           Serial.println("ARDUINO_READY");
           Serial.println("FSM: IDLE -> WANDER");
-          Servo::forward(speed);
+          Servo::forward();
           enter(State::WANDER);
         }
       }
@@ -88,7 +87,7 @@ void step(const Events& ev) {
         // both bumped at same time
         Serial.println("FSM: WANDER -> BACK_UP_BUMP");
         both_bumped = true;
-        Servo::backward(speed);
+        Servo::backward();
         enter(State::BACK_UP_BUMP);
         break;
       }
@@ -96,7 +95,7 @@ void step(const Events& ev) {
         // left bumped
         Serial.println("FSM: WANDER -> BACK_UP_BUMP");
         left_bumped = true;
-        Servo::backward(speed);
+        Servo::backward();
         enter(State::BACK_UP_BUMP);
         break;
       }
@@ -104,7 +103,7 @@ void step(const Events& ev) {
         // right bumped
         Serial.println("FSM: WANDER -> BACK_UP_BUMP");
         right_bumped = true;
-        Servo::backward(speed);
+        Servo::backward();
         enter(State::BACK_UP_BUMP);
         break;
       }
@@ -182,7 +181,7 @@ void step(const Events& ev) {
           dx_px = 0;
           waiting_reply = false;
 
-          Servo::backward(speed);                 // IMPORTANT: match the state we're entering
+          Servo::backward();                 // IMPORTANT: match the state we're entering
           Servo::wing_open();
           enter(State::BACK_UP_FLASH);
           break;
@@ -198,8 +197,8 @@ void step(const Events& ev) {
         Serial.print("DETECT_TURN_TIME = ");
         Serial.println(DETECT_TURN_TIME);
 
-        if (dx < 0) Servo::turn_left(speed);
-        else        Servo::turn_right(speed);
+        if (dx < 0) Servo::turn_left();
+        else        Servo::turn_right();
 
         dx_px = 0;
         waiting_reply = false;
@@ -210,7 +209,7 @@ void step(const Events& ev) {
 
       if (in_state_ms() >= DETECT_TIME) {
         Serial.println("FSM: DETECT -> WANDER");
-        Servo::forward(speed);
+        Servo::forward();
         enter(State::WANDER);
       }
       break;
@@ -220,7 +219,7 @@ void step(const Events& ev) {
       if (in_state_ms() >= DETECT_TURN_TIME) {
         Serial.println("FSM: DETECT_TURN_TIME -> BACK_UP_FLASH");
         DETECT_TURN_TIME = 0;
-        Servo::backward(speed);
+        Servo::backward();
         Servo::wing_open();
         enter(State::BACK_UP_FLASH);
       }
@@ -241,7 +240,7 @@ void step(const Events& ev) {
     case State::FLASH: {
       if (in_state_ms() >= FLASH_TIME) {
         Serial.println("FSM: FLASH -> TURN");
-        Servo::turn_right(speed);
+        Servo::turn_right();
         // LEDs::off();
         NeoPixel::off();
         Servo::wing_closed();
@@ -263,12 +262,12 @@ void step(const Events& ev) {
     case State::BACK_UP_BUMP: {
       if (in_state_ms() >= BACK_UP_BUMP_TIME) {
         Serial.println("FSM: BACK_UP_BUMP -> TURN");
-        if (both_bumped) {Servo::turn_right(speed); both_bumped = false; enter(State::TURN);}
-        else if (left_bumped) {Servo::turn_left(speed); left_bumped = false; enter(State::TURN);}
-        else if (right_bumped) {Servo::turn_right(speed); right_bumped = false; enter(State::TURN);}
+        if (both_bumped) {Servo::turn_right(); both_bumped = false; enter(State::TURN);}
+        else if (left_bumped) {Servo::turn_left(); left_bumped = false; enter(State::TURN);}
+        else if (right_bumped) {Servo::turn_right(); right_bumped = false; enter(State::TURN);}
         else {
           // safety fallback if no flag is set
-          Servo::turn_right(speed);
+          Servo::turn_right();
           enter(State::TURN);
         }
       }

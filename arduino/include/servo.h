@@ -4,11 +4,11 @@
 
 namespace Servo {
     void begin();
-    void forward(int16_t speed);
+    void forward();
     void stop();
-    void backward(int16_t speed);
-    void turn_right(int16_t speed);
-    void turn_left(int16_t speed);
+    void backward();
+    void turn_right();
+    void turn_left();
     void wing_open();
     void wing_closed();
 }

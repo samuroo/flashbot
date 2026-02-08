@@ -13,6 +13,8 @@ static const uint16_t WING_INIT_POS = 0;
 static const uint16_t WING_OPEN_POS = 500;
 static const uint16_t WING_SPEED = 1000;
 
+static const int16_t speed = 400;
+
 SCSCL sc;
 
 namespace Servo {
@@ -36,7 +38,7 @@ namespace Servo {
   }
 
   // LEG MOVEMENTS
-  void forward(int16_t speed) {
+  void forward() {
     sc.WritePWM(LEFT_ID, speed);
     sc.WritePWM(RIGHT_ID, speed);
   }
@@ -46,17 +48,17 @@ namespace Servo {
     sc.WritePWM(RIGHT_ID, (int16_t)0);
   }
 
-  void backward(int16_t speed) {
+  void backward() {
     sc.WritePWM(LEFT_ID, -speed);
     sc.WritePWM(RIGHT_ID, -speed);
   }
 
-  void turn_right(int16_t speed) {
+  void turn_right() {
     sc.WritePWM(LEFT_ID, speed);
     sc.WritePWM(RIGHT_ID, -speed);
   }
 
-  void turn_left(int16_t speed) {
+  void turn_left() {
     sc.WritePWM(LEFT_ID, -speed);
     sc.WritePWM(RIGHT_ID, speed);
   }
