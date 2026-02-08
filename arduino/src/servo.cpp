@@ -1,3 +1,4 @@
+#include <math.h>
 #include "servo.h"
 
 static const uint8_t RX_PIN = 0;
@@ -13,7 +14,7 @@ static const uint16_t WING_INIT_POS = 0;
 static const uint16_t WING_OPEN_POS = 500;
 static const uint16_t WING_SPEED = 1000;
 
-static const int16_t speed = 400;
+// static const int16_t speed = 400;
 
 // hall sync servos
 static float base_speed = 400;
@@ -79,27 +80,31 @@ namespace Servo {
 
   // LEG MOVEMENTS
   void forward() {
+    sync_reset();
     sc.WritePWM(LEFT_ID, (int16_t)roundf(speed_left));
     sc.WritePWM(RIGHT_ID, (int16_t)roundf(speed_right));
   }
 
   void stop() {
+    sync_reset();
     sc.WritePWM(LEFT_ID, (int16_t)0);
     sc.WritePWM(RIGHT_ID, (int16_t)0);
-    sync_reset();
   }
 
   void backward() {
+    sync_reset();
     sc.WritePWM(LEFT_ID, -(int16_t)roundf(speed_left));
     sc.WritePWM(RIGHT_ID, -(int16_t)roundf(speed_right));
   }
 
   void turn_right() {
+    sync_reset();
     sc.WritePWM(LEFT_ID, (int16_t)roundf(speed_left));
     sc.WritePWM(RIGHT_ID, -(int16_t)roundf(speed_right));
   }
 
   void turn_left() {
+    sync_reset();
     sc.WritePWM(LEFT_ID, -(int16_t)roundf(speed_left));
     sc.WritePWM(RIGHT_ID, (int16_t)roundf(speed_right));
   }
@@ -137,7 +142,7 @@ namespace Servo {
 
     // If LEFT just ticked: RIGHT should be at half-cycle (anti-phase)
     if (left_event) {
-      float frac_r = (float)(now_us - last_right_us) / (float)period_left_us; // 0..1ish
+      float frac_r = (float)(now_us - last_right_us) / (float)period_right_us; // 0..1ish
       frac_r -= floorf(frac_r);
       float err = wrap_half(frac_r - 0.5f); // want 0.5 -> 180 phase
 
@@ -148,7 +153,7 @@ namespace Servo {
 
     // If RIGHT just ticked: LEFT should be at half-cycle
     if (right_event) {
-      float frac_l = (float)(now_us - last_left_us) / (float)period_right_us;
+      float frac_l = (float)(now_us - last_left_us)  / (float)period_left_us;
       frac_l -= floorf(frac_l);
       float err = wrap_half(frac_l - 0.5f);
 
@@ -156,7 +161,6 @@ namespace Servo {
       speed_left = base_speed * (1.0f - corr); // TURN to + corr if seems to go wrong way
     }
   }
-
 
 } // name space
 
