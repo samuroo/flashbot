@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 from picamera2 import Picamera2
+from libcamera import Transform
 
 
 # ---- Paths (works no matter where you run from) ----
@@ -24,7 +25,11 @@ output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatt
 
 # ---- Camera ----
 picam2 = Picamera2()
-picam2.configure(picam2.create_preview_configuration(main={"size": (640, 360), "format": "RGB888"}))
+config = picam2.create_preview_configuration(
+    main={"size": (640, 360), "format": "RGB888"},
+    transform=Transform(hflip=True, vflip=True)  # 180° rotate
+)
+picam2.configure(config)
 picam2.start()
 
 def detect_largest_person(img_bgr=None, conf_th=0.5, nms_th=0.4, debug=False):
