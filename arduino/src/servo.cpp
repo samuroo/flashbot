@@ -10,8 +10,11 @@ static const uint8_t LEFT_WING_ID = 3;
 static const uint8_t RIGHT_WING_ID = 2;
 
 // TEMP POSITIONS & SPEED (3/2/2026)
-static const uint16_t WING_INIT_POS = 0;
-static const uint16_t WING_OPEN_POS = 500;
+static const uint16_t RIGHT_WING_INIT_POS = 50;
+static const uint16_t RIGHT_WING_OPEN_POS = 350;
+static const uint16_t LEFT_WING_INIT_POS = 1000;
+static const uint16_t LEFT_WING_OPEN_POS = 700; 
+// static const uint16_t WING_OPEN_POS = 500;
 static const uint16_t WING_SPEED = 1000;
 
 // static const int16_t speed = 400;
@@ -72,8 +75,8 @@ namespace Servo {
     stop();
 
     // wings -> ID, POSITION, MOVE DELAY, SPEED (Max 1500)
-    sc.WritePos(LEFT_WING_ID, WING_INIT_POS, 0, WING_SPEED);
-    sc.WritePos(RIGHT_WING_ID, WING_INIT_POS, 0, WING_SPEED);
+    sc.WritePos(LEFT_WING_ID, LEFT_WING_INIT_POS, 0, WING_SPEED);
+    sc.WritePos(RIGHT_WING_ID, RIGHT_WING_INIT_POS, 0, WING_SPEED);
     
     delay(1000);
   }
@@ -111,13 +114,13 @@ namespace Servo {
 
   // WINGS
   void wing_open() {
-    sc.WritePos(LEFT_WING_ID, WING_INIT_POS, 0, WING_SPEED);
-    sc.WritePos(RIGHT_WING_ID, WING_OPEN_POS, 0, WING_SPEED);
+    sc.WritePos(LEFT_WING_ID, LEFT_WING_OPEN_POS, 0, WING_SPEED);
+    sc.WritePos(RIGHT_WING_ID, RIGHT_WING_OPEN_POS, 0, WING_SPEED);
   }
 
   void wing_closed() {
-    sc.WritePos(LEFT_WING_ID, WING_INIT_POS, 0, WING_SPEED);
-    sc.WritePos(RIGHT_WING_ID, WING_INIT_POS, 0, WING_SPEED); 
+    sc.WritePos(LEFT_WING_ID, LEFT_WING_INIT_POS, 0, WING_SPEED);
+    sc.WritePos(RIGHT_WING_ID, RIGHT_WING_INIT_POS, 0, WING_SPEED); 
   }
 
 
