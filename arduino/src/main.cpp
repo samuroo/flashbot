@@ -13,7 +13,7 @@ void setup() {
   Serial.begin(115200);
   Inputs::begin();
   Fsm::begin(DEBUG_WITHOUT_PI);
-  Servo::begin();
+  // Servo::begin();
   NeoPixel::begin();
   Serial.println("Setup Complete");
 }
@@ -27,6 +27,8 @@ void loop() {
   // if (ev.limit_released_left) Serial.println("LEFT RELEASED");
   // if (ev.limit_bumped_right) Serial.println("RIGHT BUMPED");
   // if (ev.limit_released_right) Serial.println("RIGHT RELEASED");
+  // if (ev.hall_left) Serial.println("LEFT_HALL");
+  // if (ev.hall_right) Serial.println("RIGHT_HALL");
 
   if (ev.hall_left || ev.hall_right) Servo::sync_servos(ev.hall_left, ev.hall_right, micros());
 

@@ -22,12 +22,12 @@ static bool left_bumped = false;
 static bool right_bumped = false;
 static bool both_bumped = false;
 
-static unsigned long WANDER_TIME = 5000;
+static unsigned long WANDER_TIME = 4000;
 static unsigned long DETECT_TIME = 4000;
 static unsigned long BACK_UP_FLASH_TIME = 2000;
 static unsigned long BACK_UP_BUMP_TIME = 3000;
-static unsigned long FLASH_TIME = 500;
-static unsigned long TURN_TIME = 3000;
+static unsigned long FLASH_TIME = 1000;
+static unsigned long TURN_TIME = 5000;
 static unsigned long DETECT_TURN_TIME = 0;
 
 // PRIVATE HELPERS
@@ -58,7 +58,7 @@ void step(const Events& ev) {
     // IDLE 
     // DEBUG : NO PI CONNECTED
     case State::IDLE_DEBUG: {
-      if (ev.hall_left) {
+      if (ev.limit_released_left) {
         Serial.println("FSM: IDLE_DEBUG -> WANDER");
         Servo::forward();
         enter(State::WANDER);
@@ -74,6 +74,8 @@ void step(const Events& ev) {
         if (msg == "PI_ON") {
           Serial.println("ARDUINO_READY");
           Serial.println("FSM: IDLE -> WANDER");
+          Servo::begin(); // only startup servo when power and pi on
+          // move forward and try to sync legs
           Servo::forward();
           enter(State::WANDER);
         }
@@ -168,9 +170,9 @@ void step(const Events& ev) {
 
       if (person_detected) {
         const int DX_MAX = 320;                 // since width = 640
-        const int CENTER_ENOUGH = DX_MAX / 4;   // 80 px = 640/8 from center
+        const int CENTER_ENOUGH = DX_MAX;   // 80 px = 640/8 from center -> right now just assumes center enough every time
         const unsigned long TURN_MIN_MS = 250;
-        const unsigned long TURN_MAX_MS = 4000;
+        const unsigned long TURN_MAX_MS = 2500;
 
         int dx = dx_px;
         int mag = abs(dx);
@@ -180,9 +182,7 @@ void step(const Events& ev) {
           Serial.println("Centered enough -> BACK_UP_FLASH");
           dx_px = 0;
           waiting_reply = false;
-
           Servo::backward();                 // IMPORTANT: match the state we're entering
-          Servo::wing_open();
           enter(State::BACK_UP_FLASH);
           break;
         }
@@ -207,11 +207,12 @@ void step(const Events& ev) {
 
       }
 
-      if (in_state_ms() >= DETECT_TIME) {
-        Serial.println("FSM: DETECT -> WANDER");
-        Servo::forward();
-        enter(State::WANDER);
-      }
+      // EDIT 17:12 Sam 
+      // if (in_state_ms() >= DETECT_TIME) {
+      //   Serial.println("FSM: DETECT -> WANDER");
+      //   Servo::forward();
+      //   enter(State::WANDER);
+      // }
       break;
     }
 
@@ -220,7 +221,6 @@ void step(const Events& ev) {
         Serial.println("FSM: DETECT_TURN_TIME -> BACK_UP_FLASH");
         DETECT_TURN_TIME = 0;
         Servo::backward();
-        Servo::wing_open();
         enter(State::BACK_UP_FLASH);
       }
       break;
@@ -229,8 +229,8 @@ void step(const Events& ev) {
     case State::BACK_UP_FLASH: {
       if (in_state_ms() >= BACK_UP_FLASH_TIME) {
         Serial.println("FSM: BACK_UP_FLASH -> FLASH");
+        Servo::wing_open();
         Servo::stop();
-        // LEDs::on();
         NeoPixel::white();
         enter(State::FLASH);
       }
@@ -241,7 +241,6 @@ void step(const Events& ev) {
       if (in_state_ms() >= FLASH_TIME) {
         Serial.println("FSM: FLASH -> TURN");
         Servo::turn_right();
-        // LEDs::off();
         NeoPixel::off();
         Servo::wing_closed();
         enter(State::TURN);
@@ -249,13 +248,100 @@ void step(const Events& ev) {
       break;
     }
 
+    // TIME BASED
+    // case State::TURN: {
+    //   if (in_state_ms() >= TURN_TIME) {
+    //     Serial.println("FSM: TURN -> WANDER");
+    //     Servo::forward();
+    //     enter(State::WANDER);
+    //   }
+    //   break;
+    // }
+
+    //HALL EFFECT METHOD
+    // case State::TURN: {
+    //   static uint8_t l_count = 0;
+    //   static uint8_t r_count = 0;
+    //   static bool initialized = false;
+
+    //   if (!initialized) {
+    //     l_count = 0;
+    //     r_count = 0;
+    //     initialized = true;
+    //   }
+
+    //   if (ev.hall_left)  l_count++;
+    //   if (ev.hall_right) r_count++;
+
+    //   const uint8_t TARGET = 2;   // “2 passes” per side
+
+    //   // Keep turning until BOTH sides hit target
+    //   if (l_count >= TARGET && r_count >= TARGET) {
+    //     initialized = false; // reset for next TURN
+
+    //     Serial.println("FSM: TURN (hall-count done) -> WANDER");
+    //     Servo::forward();                 // forward() should set mode internally
+    //     enter(State::WANDER);
+    //   }
+
+    //   if (in_state_ms() >= TURN_TIME) {
+    //     Serial.println("FSM: TURN (MISSED HALL) -> WANDER");
+    //     Servo::forward();
+    //     enter(State::WANDER);
+    //   }
+
+    //   break;
+    // }
     case State::TURN: {
-      if (in_state_ms() >= TURN_TIME) {
-        Serial.println("FSM: TURN -> WANDER");
+      static uint8_t l_count = 0;
+      static uint8_t r_count = 0;
+      static bool initialized = false;
+      static bool left_stopped = false;
+      static bool right_stopped = false;
+
+      if (!initialized) {
+        l_count = 0;
+        r_count = 0;
+        left_stopped = false;
+        right_stopped = false;
+        initialized = true;
+      }
+
+      if (ev.hall_left && !left_stopped) {
+        l_count++;
+        if (l_count >= 3) {
+          Servo::stop_left();
+          left_stopped = true;
+        }
+      }
+
+      if (ev.hall_right && !right_stopped) {
+        r_count++;
+        if (r_count >= 3) {
+          Servo::stop_right();
+          right_stopped = true;
+        }
+      }
+
+      // When BOTH finished → go to wander
+      if (left_stopped && right_stopped) {
+        initialized = false;
+        Serial.println("FSM: TURN done -> WANDER");
+        Servo::forward();
         enter(State::WANDER);
       }
+
+      if (in_state_ms() >= TURN_TIME) {
+        initialized = false;
+        Serial.println("FSM: TURN timeout -> WANDER");
+        Servo::forward();
+        enter(State::WANDER);
+      }
+
       break;
     }
+
+
 
 
     // BUMPED
