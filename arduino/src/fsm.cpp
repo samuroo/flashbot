@@ -207,6 +207,17 @@ void step(const Events& ev) {
 
       }
 
+      if (ev.limit_bumped_left){
+        Serial.println("FSM: DETECT BUMBER LEFT (DEBUG) -> TURN");
+        Servo::turn_left();
+        enter(State::TURN);
+      }
+      if (ev.limit_bumped_right){
+        Serial.println("FSM: DETECT BUMBER RIGHT (DEBUG) -> TURN");
+        Servo::turn_right();
+        enter(State::TURN);
+      }
+
       // EDIT 17:12 Sam 
       // if (in_state_ms() >= DETECT_TIME) {
       //   Serial.println("FSM: DETECT -> WANDER");
