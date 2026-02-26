@@ -27,7 +27,7 @@ static unsigned long DETECT_TIME = 4000;
 static unsigned long BACK_UP_FLASH_TIME = 2000;
 static unsigned long BACK_UP_BUMP_TIME = 3000;
 static unsigned long FLASH_TIME = 1000;
-static unsigned long TURN_TIME = 5000;
+static unsigned long TURN_TIME = 10000; // make this 10 seconds so turning actually may work?!
 static unsigned long DETECT_TURN_TIME = 0;
 
 // PRIVATE HELPERS
