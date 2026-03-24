@@ -1,43 +1,57 @@
 from flask import Flask, Response
+from picamera2 import Picamera2
+from libcamera import Transform
 import cv2
 
 app = Flask(__name__)
 
-camera = cv2.VideoCapture(0)  # 0 = default camera
+picam2 = Picamera2()
+config = picam2.create_preview_configuration(
+    main={"size": (640, 360), "format": "RGB888"},
+    transform=Transform(hflip=True, vflip=True)
+)
+picam2.configure(config)
+picam2.start()
+
 
 def generate_frames():
     while True:
-        success, frame = camera.read()
-        if not success:
-            break
+        frame = picam2.capture_array()
 
-        # encode frame as JPEG
-        _, buffer = cv2.imencode(".jpg", frame)
+        # Picamera2 gives RGB, but OpenCV usually expects BGR for encoding
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        success, buffer = cv2.imencode(".jpg", frame)
+        if not success:
+            continue
+
         frame_bytes = buffer.tobytes()
 
-        # stream frame in MJPEG format
         yield (
             b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+            b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+        )
 
-# flask loop requests / and then runs index()
+
 @app.route("/")
 def index():
     return """
     <html>
         <body>
+            <h1>Pi Camera Stream</h1>
             <img src="/video_feed">
         </body>
     </html>
     """
 
-# now flask makes second request for the /video_feed, in the main index image code
+
 @app.route("/video_feed")
 def video_feed():
-    # we are now returning  a STREAM (Response with a generator)
     return Response(
         generate_frames(),
-        mimetype="multipart/x-mixed-replace; boundary=frame")
+        mimetype="multipart/x-mixed-replace; boundary=frame"
+    )
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
