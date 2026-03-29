@@ -22,7 +22,8 @@ def get_jpeg_frame():
             return None
         frame = _latest_frame.copy()
 
-    success, buffer = cv2.imencode(".jpg", frame)
+    frame = cv2.resize(frame, (320, 180))
+    success, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
     if not success:
         return None
 
