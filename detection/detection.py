@@ -35,12 +35,12 @@ def setup_camera(mode="pi", camera_index=0):
 
     stop_camera()
 
-    if mode == "testing":
+    if mode == "computer-camera":
         cam = cv2.VideoCapture(camera_index)
         if not cam.isOpened():
             raise RuntimeError("Could not open computer camera.")
         camera = cam
-        camera_mode = "testing"
+        camera_mode = "computer-camera"
         return
 
     from picamera2 import Picamera2
@@ -63,7 +63,7 @@ def stop_camera():
     if camera is None:
         return
 
-    if camera_mode == "testing":
+    if camera_mode == "computer-camera":
         camera.release()
     else:
         camera.stop()
@@ -76,7 +76,7 @@ def capture_frame():
     if camera is None:
         setup_camera()
 
-    if camera_mode == "testing":
+    if camera_mode == "computer-camera":
         success, frame = camera.read()
         if not success:
             raise RuntimeError("Could not read frame from computer camera.")
