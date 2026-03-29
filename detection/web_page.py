@@ -1,31 +1,18 @@
+import time
+
 from flask import Flask, Response
-from picamera2 import Picamera2
-from libcamera import Transform
-import cv2
+
+from detection.frame_hub import get_jpeg_frame
 
 app = Flask(__name__)
 
-picam2 = Picamera2()
-config = picam2.create_preview_configuration(
-    main={"size": (640, 360), "format": "RGB888"},
-    transform=Transform(hflip=True, vflip=True)
-)
-picam2.configure(config)
-picam2.start()
-
-
+# ask for frames from the common frame_hub threading link
 def generate_frames():
     while True:
-        frame = picam2.capture_array()
-
-        # Picamera2 gives RGB, but OpenCV usually expects BGR for encoding
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        success, buffer = cv2.imencode(".jpg", frame)
-        if not success:
+        frame_bytes = get_jpeg_frame()
+        if frame_bytes is None:
+            time.sleep(0.05)
             continue
-
-        frame_bytes = buffer.tobytes()
 
         yield (
             b"--frame\r\n"
@@ -38,7 +25,8 @@ def index():
     return """
     <html>
         <body>
-            <h1>Pi Camera Stream</h1>
+            <h1>Camera Stream</h1>
+            <p>Waiting for frames from main.py</p>
             <img src="/video_feed">
         </body>
     </html>
@@ -53,5 +41,10 @@ def video_feed():
     )
 
 
+def start_web_server(host="0.0.0.0", port=5000):
+    app.run(host=host, port=port, debug=False, use_reloader=False)
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    print("Starting web stream server")
+    start_web_server()
