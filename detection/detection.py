@@ -83,7 +83,8 @@ def capture_frame():
         return frame
 
     frame_rgb = camera.capture_array()
-    return cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+    # return cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+    return frame_rgb
 
 
 def detect_largest_person(img_bgr=None, conf_th=0.5, nms_th=0.4, debug=False):
