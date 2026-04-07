@@ -108,8 +108,11 @@ try:
                 if not line:
                     continue
 
+                # still need to try this, but continsuly update frame and the if line is REQ then arudin is asking for detections
+                det = process_frame()
+
                 if line == "REQ_DET":
-                    det = process_frame()
+                    # det = process_frame()
 
                     if det is None:
                         ser.write(b"0\n")
