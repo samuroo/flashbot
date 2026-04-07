@@ -83,7 +83,6 @@ def capture_frame():
         return frame
 
     frame_rgb = camera.capture_array()
-    # return cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
     return frame_rgb
 
 

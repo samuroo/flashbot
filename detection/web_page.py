@@ -1,6 +1,6 @@
 import time
 
-from flask import Flask, Response
+from flask import Flask, Response, redirect, url_for
 
 from detection.frame_hub import get_jpeg_frame
 
@@ -29,9 +29,17 @@ def index():
             <p>Waiting for frames from main.py</p>
             <img src="/video_feed">
         </body>
+
+        <form method="POST" action="/test_action_button">
+            <button type="test_button">Test Button</button>
+        </form>
     </html>
     """
 
+@app.route("/test_action_button", methods=["POST"])
+def test_action_button():
+    print("button clicked")
+    return redirect(url_for("index"))
 
 @app.route("/video_feed")
 def video_feed():
