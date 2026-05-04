@@ -24,10 +24,18 @@ def generate_frames():
 def index():
     return """
     <html>
-        <body>
-            <h1>Camera Stream</h1>
-            <p>Waiting for frames from main.py</p>
-            <img src="/video_feed">
+        <body style="
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #111;
+        ">
+            <img src="/video_feed" style="
+                max-width: 100%;
+                max-height: 100%;
+            ">
         </body>
     </html>
     """

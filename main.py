@@ -103,13 +103,14 @@ try:
 
         # ---- Main loop: only respond when Arduino asks ----
         while True:
+            det = process_frame()
             while ser.in_waiting:
                 line = ser.readline().decode(errors="ignore").strip()
                 if not line:
                     continue
 
                 # still need to try this, but continsuly update frame and the if line is REQ then arudin is asking for detections
-                det = process_frame()
+                # det = process_frame()
 
                 if line == "REQ_DET":
                     # det = process_frame()
@@ -126,8 +127,8 @@ try:
                         h = int(y2 - y1)
 
                         # ---- size gate ----
-                        W_MIN = 120
-                        H_MIN = 160
+                        W_MIN = 120+50
+                        H_MIN = 160+50
                         if w < W_MIN or h < H_MIN:
                             ser.write(b"0\n")
                             continue

@@ -86,7 +86,7 @@ def capture_frame():
     return frame_rgb
 
 
-def detect_largest_person(img_bgr=None, conf_th=0.5, nms_th=0.4, debug=False):
+def detect_largest_person(img_bgr=None, conf_th=0.75, nms_th=0.4, debug=False):
     if not debug:
         img_bgr = capture_frame()
 
