@@ -15,3 +15,8 @@ Each message follows this format:
 
 ```text
 <TYPE>,<NAME>[,<ARG1>,<ARG2>,...]\n
+```
+
+## Streaming on local browser
+topics: </face_bbox_image> or </camera_node/image_raw>
+http://flashbot:8080/stream?topic=/__
