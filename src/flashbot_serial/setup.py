@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "arduino_test_node = flashbot_serial.arduino_test_node:main",
+            "flashbot_serial_node = flashbot_serial.flashbot_serial_node:main",
         ],
     },
 )

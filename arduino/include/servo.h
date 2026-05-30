@@ -3,24 +3,9 @@
 #include <SCServo.h>
 
 namespace Servo {
-    enum class DriveMode {
-        STOP,
-        FORWARD,
-        BACKWARD
-    };
-    void setDriveMode(DriveMode mode);
-
     void begin();
-    void forward();
-    void stop();
-    void backward();
-    void turn_right();
-    void turn_left();
-    void wing_open();
-    void wing_closed();
-    void stop_left();
-    void stop_right();
-
-    void sync_servos(bool left_event, bool right_event, uint32_t now_us);
+    void setLeftSpeed(int16_t speed);
+    void setRightSpeed(int16_t speed);
+    void setLeftWing(uint16_t position, uint16_t speed);
+    void setRightWing(uint16_t position, uint16_t speed);
 }
-

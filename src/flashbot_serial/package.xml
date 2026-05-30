@@ -3,8 +3,8 @@
 <package format="3">
   <name>flashbot_serial</name>
   <version>0.0.0</version>
-  <description>Basic ROS 2 serial test bridge for Flashbot Arduino communication.</description>
-  <maintainer email="flashbot@todo.todo">flashbot</maintainer>
+  <description>ROS 2 serial bridge for Flashbot Arduino communication.</description>
+  <maintainer email="samleveau14@gmail.com">flashbot</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
