@@ -87,6 +87,16 @@ class FlashbotSerialNode(Node):
             "/flashbot/events/turn_done",
             10,
         )
+        servo_status_qos = QoSProfile(
+            depth=20,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.servo_status_pub = self.create_publisher(
+            String,
+            "/flashbot/servo_status",
+            servo_status_qos,
+        )
 
         self.create_subscription(
             String,
@@ -236,6 +246,12 @@ class FlashbotSerialNode(Node):
             self.publish_bool(self.aligned_pub, True)
         elif line == "EVT,turn_done":
             self.publish_bool(self.turn_done_pub, True)
+        elif line.startswith("EVT,servo,"):
+            status = line.removeprefix("EVT,servo,")
+            msg = String()
+            msg.data = status
+            self.servo_status_pub.publish(msg)
+            self.get_logger().info(f"Servo status: {status}")
         elif line == "EVT,hall_left":
             self.publish_bool(self.hall_left_pub, True)
             self.hall_left_false_at = time.monotonic() + self.hall_pulse_sec

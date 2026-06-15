@@ -41,6 +41,83 @@ static bool turn_left_done = false;
 static bool turn_right_done = false;
 static bool turn_done_event = false;
 
+static void reportServoStatus(uint8_t id, const String& status) {
+  Serial.print("EVT,servo,id=");
+  Serial.print(id);
+  Serial.print(",");
+  Serial.println(status);
+}
+
+static bool pingServo(uint8_t id) {
+  bool found = sc.Ping(id) == id;
+  reportServoStatus(id, found ? "ping=ok" : "ping=failed");
+  return found;
+}
+
+static bool configureLegServo(uint8_t id, bool found) {
+  if (!found) {
+    reportServoStatus(id, "status=unavailable");
+    return false;
+  }
+
+  int torque_off_result = sc.EnableTorque(id, 0);
+  if (torque_off_result != 1) {
+    reportServoStatus(id, "torque_off=failed");
+    return false;
+  }
+  delay(20);
+
+  bool configuration_ok = true;
+  int mode_before = sc.ReadMode(id);
+  reportServoStatus(id, String("mode_before=") + mode_before);
+  if (mode_before < 0) {
+    sc.EnableTorque(id, 1);
+    reportServoStatus(id, "status=mode_read_failed");
+    return false;
+  }
+
+  if (mode_before != 3) {
+    int unlock_result = sc.unLockEprom(id);
+    int pwm_result = unlock_result == 1 ? sc.PWMMode(id) : 0;
+    int lock_result = unlock_result == 1 ? sc.LockEprom(id) : 0;
+
+    if (unlock_result != 1) {
+      configuration_ok = false;
+      reportServoStatus(id, "eprom_unlock=failed");
+    } else if (pwm_result != 1) {
+      configuration_ok = false;
+      reportServoStatus(id, "pwm_mode_write=failed");
+    } else if (lock_result != 1) {
+      configuration_ok = false;
+      reportServoStatus(id, "eprom_lock=failed");
+    } else {
+      reportServoStatus(id, "pwm_mode_write=ok");
+    }
+    delay(50);
+  } else {
+    reportServoStatus(id, "pwm_mode_write=skipped");
+  }
+
+  int torque_on_result = sc.EnableTorque(id, 1);
+  if (torque_on_result != 1) {
+    reportServoStatus(id, "torque_on=failed");
+    return false;
+  }
+  delay(20);
+
+  int mode_after = sc.ReadMode(id);
+  reportServoStatus(id, String("mode_after=") + mode_after);
+  bool ready = mode_after == 3 && configuration_ok;
+  if (ready) {
+    reportServoStatus(id, "status=ready");
+  } else if (mode_after != 3) {
+    reportServoStatus(id, "status=wrong_mode");
+  } else {
+    reportServoStatus(id, "status=configuration_failed");
+  }
+  return ready;
+}
+
 static int16_t clampWalkSpeed(int value) {
   if (value > MAX_WALK_SPEED) {
     return MAX_WALK_SPEED;
@@ -121,12 +198,16 @@ namespace Servo {
 void begin() {
   Serial1.begin(1000000);
   sc.pSerial = &Serial1;
+  delay(300);
   servo_bus_ready = true;
 
-  sc.PWMMode(LEFT_SERVO_ID);
-  sc.EnableTorque(LEFT_SERVO_ID, 1);
-  sc.PWMMode(RIGHT_SERVO_ID);
-  sc.EnableTorque(RIGHT_SERVO_ID, 1);
+  bool servo_found[4];
+  for (uint8_t id = 0; id < 4; id++) {
+    servo_found[id] = pingServo(id);
+  }
+
+  configureLegServo(RIGHT_SERVO_ID, servo_found[RIGHT_SERVO_ID]);
+  configureLegServo(LEFT_SERVO_ID, servo_found[LEFT_SERVO_ID]);
   stop();
 }
 

@@ -273,6 +273,17 @@ ros2 run flashbot_serial flashbot_serial_node --ros-args \
 The node reconnects automatically and logs `Arduino ready` after the serial
 handshake succeeds.
 
+At Arduino startup, the firmware pings servo IDs `0` through `3` and checks
+that leg IDs `0` and `1` are in PWM mode. Monitor those diagnostics with:
+
+```bash
+ros2 topic echo --qos-durability transient_local /flashbot/servo_status
+```
+
+Expected leg messages include `ping=ok`, `mode_after=3`, and `status=ready`.
+If an ID reports `ping=failed`, inspect that servo's configured ID, power, and
+serial-bus connection before testing movement.
+
 ### Arduino command topics
 
 The serial bridge subscribes to:
@@ -414,6 +425,7 @@ The serial bridge publishes:
 | `/flashbot/arduino_ready` | `std_msgs/msg/Bool` | Latched serial heartbeat status |
 | `/flashbot/events/aligned` | `std_msgs/msg/Bool` | Both legs reached their hall alignment point |
 | `/flashbot/events/turn_done` | `std_msgs/msg/Bool` | Both legs completed the configured hall-counted turn |
+| `/flashbot/servo_status` | `std_msgs/msg/String` | Servo ping and leg PWM-mode diagnostics |
 | `/flashbot/events/hall_left` | `std_msgs/msg/Bool` | Short pulse from the left hall sensor |
 | `/flashbot/events/hall_right` | `std_msgs/msg/Bool` | Short pulse from the right hall sensor |
 | `/flashbot/events/limit_left` | `std_msgs/msg/Bool` | Left limit switch pressed or released |
