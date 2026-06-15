@@ -17,6 +17,7 @@ class State(Enum):
     WALK_BACKWARD = "WALK_BACKWARD"
     FLASH = "FLASH"
     TURN_AROUND = "TURN_AROUND"
+    ALIGN_AFTER_TURN = "ALIGN_AFTER_TURN"
     ESCAPE_FORWARD = "ESCAPE_FORWARD"
 
 
@@ -200,12 +201,21 @@ class StateMachineNode(Node):
 
         elif self.state == State.TURN_AROUND:
             if self.turn_done:
-                self.enter_state(State.ESCAPE_FORWARD)
+                self.enter_state(State.ALIGN_AFTER_TURN)
             elif elapsed >= self.parameter("turn_timeout_sec"):
                 self.get_logger().warn(
-                    "Turn timed out; continuing with escape"
+                    "Turn timed out; stopping"
                 )
+                self.enter_state(State.STOP)
+
+        elif self.state == State.ALIGN_AFTER_TURN:
+            if self.aligned:
                 self.enter_state(State.ESCAPE_FORWARD)
+            elif elapsed >= self.parameter("align_timeout_sec"):
+                self.get_logger().warn(
+                    "Post-turn alignment timed out; stopping"
+                )
+                self.enter_state(State.STOP)
 
         elif self.state == State.ESCAPE_FORWARD:
             if elapsed >= self.parameter("escape_forward_sec"):
@@ -226,6 +236,8 @@ class StateMachineNode(Node):
         elif state == State.ALIGN_FORWARD:
             self.publish_flash(False)
             self.publish_wings_at_rest()
+            self.publish_drive("ALIGN_FORWARD")
+        elif state == State.ALIGN_AFTER_TURN:
             self.publish_drive("ALIGN_FORWARD")
         elif state in (State.WALK_FORWARD, State.ESCAPE_FORWARD):
             self.publish_drive("FORWARD")

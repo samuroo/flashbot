@@ -212,12 +212,16 @@ forward briefly, and enters `STOP`, where the wings flutter gently.
 The face-response sequence is:
 
 ```text
-WALK_BACKWARD -> FLASH -> TURN_AROUND -> ESCAPE_FORWARD -> STOP
+WALK_BACKWARD -> FLASH -> TURN_AROUND -> ALIGN_AFTER_TURN
+-> ESCAPE_FORWARD -> STOP
 ```
 
 A new face detection during the sequence restarts it at `WALK_BACKWARD`.
 Persistent detections are edge-triggered, so the sequence can finish; the
 detector must report `false` before another `true` counts as a new detection.
+After turning, Flashbot aligns both legs at their next hall events before
+walking forward. A turn or post-turn alignment timeout sends it to `STOP`
+instead of continuing with uncertain leg phase.
 
 Watch its state and low-level drive commands:
 
