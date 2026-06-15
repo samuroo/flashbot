@@ -7,12 +7,12 @@ static const uint8_t RIGHT_WING_ID = 2;
 
 static const int16_t MAX_WALK_SPEED = 1500;
 static const uint16_t MAX_WING_SPEED = 1500;
-static const int16_t DRIVE_SPEED = 500;
-static const int16_t ALIGN_SPEED = 250;
+static const int16_t DRIVE_SPEED = 400;
+static const int16_t ALIGN_SPEED = 400;
 static const int16_t MAX_SYNC_CORRECTION = 125;
 static const int32_t SYNC_US_PER_SPEED_STEP = 100;
-static const uint8_t BACKWARD_HALL_TARGET = 2;
-static const uint8_t TURN_HALL_TARGET = 3;
+static const uint8_t BACKWARD_HALL_TARGET = 1;
+static const uint8_t TURN_HALL_TARGET = 2;
 
 enum class DriveMode {
   STOP,

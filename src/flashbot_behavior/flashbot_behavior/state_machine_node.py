@@ -40,7 +40,7 @@ class StateMachineNode(Node):
         self.declare_parameter("right_wing_rest", 50)
         self.declare_parameter("left_wing_open", 700)
         self.declare_parameter("right_wing_open", 350)
-        self.declare_parameter("wing_flutter_units", 68)
+        self.declare_parameter("wing_flutter_units", 20)
 
         self.state = State.IDLE
         self.state_entered_at = time.monotonic()
