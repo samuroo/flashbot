@@ -2,7 +2,8 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, Int32, Int32MultiArray
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, Int32, Int32MultiArray, String
 
 try:
     import serial
@@ -20,6 +21,7 @@ class FlashbotSerialNode(Node):
         self.declare_parameter("baud_rate", 115200)
         self.declare_parameter("reconnect_period_sec", 1.0)
         self.declare_parameter("hello_period_sec", 1.0)
+        self.declare_parameter("ready_timeout_sec", 3.0)
         self.declare_parameter("hello_command", "CMD,hello")
         self.declare_parameter("hall_pulse_sec", 0.1)
 
@@ -28,17 +30,33 @@ class FlashbotSerialNode(Node):
         self.reconnect_period_sec = float(
             self.get_parameter("reconnect_period_sec").value
         )
-        self.hello_period_sec = float(self.get_parameter("hello_period_sec").value)
+        self.hello_period_sec = float(
+            self.get_parameter("hello_period_sec").value
+        )
+        self.ready_timeout_sec = float(
+            self.get_parameter("ready_timeout_sec").value
+        )
         self.hello_command = self.get_parameter("hello_command").value
         self.hall_pulse_sec = float(self.get_parameter("hall_pulse_sec").value)
 
         self.serial_handle = None
         self.last_connect_attempt = 0.0
         self.last_hello_sent = 0.0
+        self.last_ready_received = 0.0
         self.arduino_ready = False
         self.hall_left_false_at = None
         self.hall_right_false_at = None
 
+        ready_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.ready_pub = self.create_publisher(
+            Bool,
+            "/flashbot/arduino_ready",
+            ready_qos,
+        )
         self.hall_left_pub = self.create_publisher(
             Bool,
             "/flashbot/events/hall_left",
@@ -59,7 +77,23 @@ class FlashbotSerialNode(Node):
             "/flashbot/events/limit_right",
             10,
         )
+        self.aligned_pub = self.create_publisher(
+            Bool,
+            "/flashbot/events/aligned",
+            10,
+        )
+        self.turn_done_pub = self.create_publisher(
+            Bool,
+            "/flashbot/events/turn_done",
+            10,
+        )
 
+        self.create_subscription(
+            String,
+            "/flashbot/cmd/drive",
+            self.drive_callback,
+            10,
+        )
         self.create_subscription(
             Int32MultiArray,
             "/flashbot/cmd/wing_left",
@@ -92,9 +126,28 @@ class FlashbotSerialNode(Node):
         )
 
         self.timer = self.create_timer(0.05, self.timer_callback)
+        self.publish_ready(False)
         self.get_logger().info(
-            f"Flashbot serial node started, port={self.port}, baud={self.baud_rate}"
+            "Flashbot serial node started, "
+            f"port={self.port}, baud={self.baud_rate}"
         )
+
+    def drive_callback(self, msg):
+        command = msg.data.strip().upper()
+        valid_commands = {
+            "STOP",
+            "ALIGN_FORWARD",
+            "FORWARD",
+            "BACKWARD",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+        }
+        if command not in valid_commands:
+            self.get_logger().warn(
+                f"Ignoring invalid drive command: {msg.data}"
+            )
+            return
+        self.write_command(f"CMD,drive,{command}")
 
     def wing_left_callback(self, msg):
         args = self.parse_position_speed(msg, "wing_left")
@@ -121,7 +174,8 @@ class FlashbotSerialNode(Node):
     def parse_position_speed(self, msg, name):
         if len(msg.data) < 2:
             self.get_logger().warn(
-                f"Ignoring {name}: expected [position, speed], got {list(msg.data)}"
+                f"Ignoring {name}: expected [position, speed], "
+                f"got {list(msg.data)}"
             )
             return None
 
@@ -129,7 +183,9 @@ class FlashbotSerialNode(Node):
 
     def write_command(self, command):
         if self.serial_handle is None:
-            self.get_logger().warn(f"Arduino not connected; dropped: {command}")
+            self.get_logger().warn(
+                f"Arduino not connected; dropped: {command}"
+            )
             return
         try:
             self.serial_handle.write((command + "\n").encode("utf-8"))
@@ -143,7 +199,8 @@ class FlashbotSerialNode(Node):
             self.try_connect()
             return
 
-        self.send_hello_until_ready()
+        self.send_heartbeat()
+        self.check_ready_timeout()
 
         while self.serial_handle is not None:
             try:
@@ -167,13 +224,18 @@ class FlashbotSerialNode(Node):
 
     def handle_event(self, line):
         if line == "EVT,ready":
+            self.last_ready_received = time.monotonic()
             if not self.arduino_ready:
                 self.get_logger().info("Arduino ready")
-            self.arduino_ready = True
+                self.publish_ready(True)
         elif line == "EVT,boot":
-            self.arduino_ready = False
+            self.publish_ready(False)
             self.last_hello_sent = 0.0
             self.get_logger().info("Arduino booted")
+        elif line == "EVT,aligned":
+            self.publish_bool(self.aligned_pub, True)
+        elif line == "EVT,turn_done":
+            self.publish_bool(self.turn_done_pub, True)
         elif line == "EVT,hall_left":
             self.publish_bool(self.hall_left_pub, True)
             self.hall_left_false_at = time.monotonic() + self.hall_pulse_sec
@@ -193,11 +255,17 @@ class FlashbotSerialNode(Node):
 
     def clear_hall_pulses(self):
         now = time.monotonic()
-        if self.hall_left_false_at is not None and now >= self.hall_left_false_at:
+        if (
+            self.hall_left_false_at is not None
+            and now >= self.hall_left_false_at
+        ):
             self.publish_bool(self.hall_left_pub, False)
             self.hall_left_false_at = None
 
-        if self.hall_right_false_at is not None and now >= self.hall_right_false_at:
+        if (
+            self.hall_right_false_at is not None
+            and now >= self.hall_right_false_at
+        ):
             self.publish_bool(self.hall_right_pub, False)
             self.hall_right_false_at = None
 
@@ -215,7 +283,8 @@ class FlashbotSerialNode(Node):
 
         if serial is None:
             self.get_logger().error(
-                "pyserial is not installed. Install python3-serial or pyserial."
+                "pyserial is not installed. Install python3-serial "
+                "or pyserial."
             )
             return
 
@@ -228,17 +297,20 @@ class FlashbotSerialNode(Node):
             )
             self.serial_handle.reset_input_buffer()
             self.serial_handle.reset_output_buffer()
-            self.arduino_ready = False
+            self.publish_ready(False)
             self.last_hello_sent = 0.0
+            self.last_ready_received = 0.0
             self.get_logger().info(
                 f"Connected to Arduino on {self.port}; waiting for handshake"
             )
         except SerialException as exc:
             self.serial_handle = None
-            self.get_logger().warn(f"Waiting for Arduino on {self.port}: {exc}")
+            self.get_logger().warn(
+                f"Waiting for Arduino on {self.port}: {exc}"
+            )
 
-    def send_hello_until_ready(self):
-        if self.arduino_ready or self.serial_handle is None:
+    def send_heartbeat(self):
+        if self.serial_handle is None:
             return
 
         now = time.monotonic()
@@ -246,13 +318,28 @@ class FlashbotSerialNode(Node):
             return
 
         try:
-            self.serial_handle.write((self.hello_command + "\n").encode("utf-8"))
+            hello = (self.hello_command + "\n").encode("utf-8")
+            self.serial_handle.write(hello)
             self.serial_handle.flush()
             self.last_hello_sent = now
-            self.get_logger().debug(f"Sent handshake: {self.hello_command}")
+            self.get_logger().debug(f"Sent heartbeat: {self.hello_command}")
         except SerialException as exc:
             self.get_logger().warn(f"Serial handshake failed: {exc}")
             self.close_serial()
+
+    def check_ready_timeout(self):
+        if not self.arduino_ready:
+            return
+        elapsed = time.monotonic() - self.last_ready_received
+        if elapsed > self.ready_timeout_sec:
+            self.get_logger().warn("Arduino heartbeat timed out")
+            self.publish_ready(False)
+
+    def publish_ready(self, value):
+        if self.arduino_ready == value and value:
+            return
+        self.arduino_ready = value
+        self.publish_bool(self.ready_pub, value)
 
     def close_serial(self):
         if self.serial_handle is not None:
@@ -261,7 +348,7 @@ class FlashbotSerialNode(Node):
             except SerialException:
                 pass
         self.serial_handle = None
-        self.arduino_ready = False
+        self.publish_ready(False)
 
     def destroy_node(self):
         self.close_serial()

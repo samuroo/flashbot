@@ -1,91 +1,329 @@
+import random
+import time
+from enum import Enum
+
 import rclpy
 from rclpy.node import Node
-
-from std_msgs.msg import Bool, String
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import RegionOfInterest
+from std_msgs.msg import Bool, Int32MultiArray, String
+
+
+class State(Enum):
+    IDLE = "IDLE"
+    ALIGN_FORWARD = "ALIGN_FORWARD"
+    WALK_FORWARD = "WALK_FORWARD"
+    STOP = "STOP"
+    WALK_BACKWARD = "WALK_BACKWARD"
+    FLASH = "FLASH"
+    TURN_AROUND = "TURN_AROUND"
+    ESCAPE_FORWARD = "ESCAPE_FORWARD"
 
 
 class StateMachineNode(Node):
     def __init__(self):
         super().__init__("state_machine_node")
 
-        self.state = "NORMAL"
-        self.face_detected = False
-        self.face_bbox = None
+        self.declare_parameter("walk_forward_sec", 3.0)
+        self.declare_parameter("walk_backward_sec", 2.0)
+        self.declare_parameter("wing_raise_sec", 0.3)
+        self.declare_parameter("flash_sec", 0.5)
+        self.declare_parameter("turn_timeout_sec", 8.0)
+        self.declare_parameter("escape_forward_sec", 3.0)
+        self.declare_parameter("align_timeout_sec", 5.0)
+        self.declare_parameter("flutter_period_sec", 1.0)
+        self.declare_parameter("flutter_hold_sec", 0.25)
+        self.declare_parameter("wing_speed", 1000)
+        self.declare_parameter("left_wing_rest", 1000)
+        self.declare_parameter("right_wing_rest", 50)
+        self.declare_parameter("left_wing_open", 700)
+        self.declare_parameter("right_wing_open", 350)
+        self.declare_parameter("wing_flutter_units", 68)
 
-        self.face_sub = self.create_subscription(
+        self.state = State.IDLE
+        self.state_entered_at = time.monotonic()
+        self.arduino_ready = False
+        self.face_detected = False
+        self.face_triggered = False
+        self.face_bbox = None
+        self.aligned = False
+        self.turn_done = False
+        self.flutter_left = True
+        self.flutter_active = False
+        self.flash_active = False
+        self.last_flutter_at = self.state_entered_at
+
+        ready_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.create_subscription(
+            Bool,
+            "/flashbot/arduino_ready",
+            self.ready_callback,
+            ready_qos,
+        )
+        self.create_subscription(
             Bool,
             "/face_detected",
             self.face_callback,
-            1
+            1,
         )
-
-        self.bbox_sub = self.create_subscription(
+        self.create_subscription(
             RegionOfInterest,
             "/face_bbox",
             self.bbox_callback,
-            1
+            1,
+        )
+        self.create_subscription(
+            Bool,
+            "/flashbot/events/aligned",
+            self.aligned_callback,
+            10,
+        )
+        self.create_subscription(
+            Bool,
+            "/flashbot/events/turn_done",
+            self.turn_done_callback,
+            10,
         )
 
+        self.drive_pub = self.create_publisher(
+            String,
+            "/flashbot/cmd/drive",
+            10,
+        )
+        self.left_wing_pub = self.create_publisher(
+            Int32MultiArray,
+            "/flashbot/cmd/wing_left",
+            10,
+        )
+        self.right_wing_pub = self.create_publisher(
+            Int32MultiArray,
+            "/flashbot/cmd/wing_right",
+            10,
+        )
+        self.flash_pub = self.create_publisher(
+            Bool,
+            "/flashbot/cmd/flash",
+            10,
+        )
+        self.state_pub = self.create_publisher(
+            String,
+            "/flashbot/state",
+            10,
+        )
         self.command_pub = self.create_publisher(
             String,
             "/flashbot_command",
-            1
+            10,
         )
 
-        self.timer = self.create_timer(0.2, self.update_state)
+        self.timer = self.create_timer(0.05, self.update_state)
+        self.publish_state()
+        self.get_logger().info("State machine started in IDLE")
 
-        self.get_logger().info("State machine node started")
+    def parameter(self, name):
+        return self.get_parameter(name).value
+
+    def ready_callback(self, msg):
+        self.arduino_ready = msg.data
 
     def face_callback(self, msg):
+        if msg.data and not self.face_detected:
+            self.face_triggered = True
         self.face_detected = msg.data
 
     def bbox_callback(self, msg):
         self.face_bbox = msg
 
+    def aligned_callback(self, msg):
+        if msg.data:
+            self.aligned = True
+
+    def turn_done_callback(self, msg):
+        if msg.data:
+            self.turn_done = True
+
     def update_state(self):
-        if self.state == "NORMAL":
-            if self.face_detected:
-                self.state = "FACE_SEEN"
-                self.publish_command("STOP")
-                self.get_logger().info("State: FACE_SEEN")
+        if not self.arduino_ready:
+            if self.state != State.IDLE:
+                self.get_logger().warn(
+                    "Arduino unavailable; returning to IDLE"
+                )
+                self.enter_state(State.IDLE)
+            return
 
-        elif self.state == "FACE_SEEN":
-            self.state = "BACK_UP"
-            self.publish_command("BACK_UP")
-            self.get_logger().info("State: BACK_UP")
+        if self.state == State.IDLE:
+            if self.face_triggered:
+                self.face_triggered = False
+                self.enter_state(State.WALK_BACKWARD)
+            else:
+                self.enter_state(State.ALIGN_FORWARD)
+            return
 
-        elif self.state == "BACK_UP":
-            self.state = "FLASH"
-            self.publish_command("FLASH")
-            self.get_logger().info("State: FLASH")
+        if self.face_triggered:
+            self.face_triggered = False
+            self.enter_state(State.WALK_BACKWARD)
+            return
 
-        elif self.state == "FLASH":
-            self.state = "TURN"
-            self.publish_command("TURN")
+        elapsed = time.monotonic() - self.state_entered_at
 
-        elif self.state == "TURN":
-            self.state = "RUN_AWAY"
-            self.publish_command("RUN_AWAY")
+        if self.state == State.ALIGN_FORWARD:
+            if self.aligned:
+                self.enter_state(State.WALK_FORWARD)
+            elif elapsed >= self.parameter("align_timeout_sec"):
+                self.get_logger().warn(
+                    "Leg alignment timed out; starting forward motion"
+                )
+                self.enter_state(State.WALK_FORWARD)
 
-        elif self.state == "RUN_AWAY":
-            if not self.face_detected:
-                self.state = "NORMAL"
-                self.publish_command("NORMAL")
-                self.get_logger().info("State: NORMAL")
+        elif self.state == State.WALK_FORWARD:
+            if elapsed >= self.parameter("walk_forward_sec"):
+                self.enter_state(State.STOP)
 
-    def publish_command(self, command):
+        elif self.state == State.STOP:
+            self.update_flutter()
+
+        elif self.state == State.WALK_BACKWARD:
+            if elapsed >= self.parameter("walk_backward_sec"):
+                self.enter_state(State.FLASH)
+
+        elif self.state == State.FLASH:
+            wing_raise_sec = self.parameter("wing_raise_sec")
+            if not self.flash_active and elapsed >= wing_raise_sec:
+                self.publish_flash(True)
+                self.flash_active = True
+            if elapsed >= wing_raise_sec + self.parameter("flash_sec"):
+                self.enter_state(State.TURN_AROUND)
+
+        elif self.state == State.TURN_AROUND:
+            if self.turn_done:
+                self.enter_state(State.ESCAPE_FORWARD)
+            elif elapsed >= self.parameter("turn_timeout_sec"):
+                self.get_logger().warn(
+                    "Turn timed out; continuing with escape"
+                )
+                self.enter_state(State.ESCAPE_FORWARD)
+
+        elif self.state == State.ESCAPE_FORWARD:
+            if elapsed >= self.parameter("escape_forward_sec"):
+                self.enter_state(State.STOP)
+
+    def enter_state(self, state):
+        self.state = state
+        self.state_entered_at = time.monotonic()
+        self.aligned = False
+        self.turn_done = False
+        self.flutter_active = False
+        self.flash_active = False
+
+        if state == State.IDLE:
+            self.publish_drive("STOP")
+            self.publish_flash(False)
+            self.publish_wings_at_rest()
+        elif state == State.ALIGN_FORWARD:
+            self.publish_flash(False)
+            self.publish_wings_at_rest()
+            self.publish_drive("ALIGN_FORWARD")
+        elif state in (State.WALK_FORWARD, State.ESCAPE_FORWARD):
+            self.publish_drive("FORWARD")
+        elif state == State.STOP:
+            self.publish_drive("STOP")
+            self.publish_wings_at_rest()
+            self.last_flutter_at = self.state_entered_at
+        elif state == State.WALK_BACKWARD:
+            self.publish_flash(False)
+            self.publish_wings_at_rest()
+            self.publish_drive("BACKWARD")
+        elif state == State.FLASH:
+            self.publish_drive("STOP")
+            self.publish_wings(
+                self.parameter("left_wing_open"),
+                self.parameter("right_wing_open"),
+            )
+            self.publish_flash(False)
+        elif state == State.TURN_AROUND:
+            self.publish_flash(False)
+            self.publish_wings_at_rest()
+            direction = random.choice(("TURN_LEFT", "TURN_RIGHT"))
+            self.publish_drive(direction)
+
+        self.publish_state()
+        self.get_logger().info(f"State: {state.value}")
+
+    def update_flutter(self):
+        now = time.monotonic()
+        flutter_period = self.parameter("flutter_period_sec")
+        flutter_hold = self.parameter("flutter_hold_sec")
+
+        if self.flutter_active:
+            if now - self.last_flutter_at >= flutter_hold:
+                self.publish_wings_at_rest()
+                self.flutter_active = False
+            return
+
+        if now - self.last_flutter_at < flutter_period:
+            return
+
+        left_rest = self.parameter("left_wing_rest")
+        right_rest = self.parameter("right_wing_rest")
+        flutter_units = self.parameter("wing_flutter_units")
+        if self.flutter_left:
+            self.publish_wings(left_rest - flutter_units, right_rest)
+        else:
+            self.publish_wings(left_rest, right_rest + flutter_units)
+
+        self.flutter_left = not self.flutter_left
+        self.flutter_active = True
+        self.last_flutter_at = now
+
+    def publish_drive(self, command):
         msg = String()
         msg.data = command
-        self.command_pub.publish(msg)
+        self.drive_pub.publish(msg)
+
+        compatibility_msg = String()
+        compatibility_msg.data = command
+        self.command_pub.publish(compatibility_msg)
+
+    def publish_flash(self, enabled):
+        msg = Bool()
+        msg.data = enabled
+        self.flash_pub.publish(msg)
+
+    def publish_wings_at_rest(self):
+        self.publish_wings(
+            self.parameter("left_wing_rest"),
+            self.parameter("right_wing_rest"),
+        )
+
+    def publish_wings(self, left_position, right_position):
+        speed = int(self.parameter("wing_speed"))
+
+        left_msg = Int32MultiArray()
+        left_msg.data = [int(left_position), speed]
+        self.left_wing_pub.publish(left_msg)
+
+        right_msg = Int32MultiArray()
+        right_msg.data = [int(right_position), speed]
+        self.right_wing_pub.publish(right_msg)
+
+    def publish_state(self):
+        msg = String()
+        msg.data = self.state.value
+        self.state_pub.publish(msg)
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = StateMachineNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

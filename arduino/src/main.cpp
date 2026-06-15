@@ -75,10 +75,31 @@ static void handle_servo_command(const String& command, bool left_servo) {
   }
 }
 
+static void handle_drive_command(const String& command) {
+  String mode = command.substring(10);
+  mode.trim();
+
+  if (mode == "STOP") {
+    Servo::stop();
+  } else if (mode == "ALIGN_FORWARD") {
+    Servo::alignForward();
+  } else if (mode == "FORWARD") {
+    Servo::forward();
+  } else if (mode == "BACKWARD") {
+    Servo::backward();
+  } else if (mode == "TURN_LEFT") {
+    Servo::turnLeft();
+  } else if (mode == "TURN_RIGHT") {
+    Servo::turnRight();
+  }
+}
+
 // Keep command handling flat so the Pi/Arduino contract is easy to inspect.
 static void handle_command(const String& command) {
   if (command == "CMD,hello") {
     publish_event("ready");
+  } else if (command.startsWith("CMD,drive,")) {
+    handle_drive_command(command);
   } else if (command.startsWith("CMD,wing_left,")) {
     handle_wing_command(command, true);
   } else if (command.startsWith("CMD,wing_right,")) {
@@ -118,6 +139,13 @@ static void read_serial_commands() {
 
 // Input events are one-shot booleans from the debounced input helper.
 static void publish_input_events(const Events& ev) {
+  Servo::handleHallEvents(
+      ev.hall_left,
+      ev.hall_left_us,
+      ev.hall_right,
+      ev.hall_right_us
+  );
+
   if (ev.hall_left) {
     publish_event("hall_left");
   }
@@ -135,6 +163,12 @@ static void publish_input_events(const Events& ev) {
   }
   if (ev.limit_released_right) {
     publish_event("limit_release_right");
+  }
+  if (Servo::consumeAligned()) {
+    publish_event("aligned");
+  }
+  if (Servo::consumeTurnDone()) {
+    publish_event("turn_done");
   }
 }
 

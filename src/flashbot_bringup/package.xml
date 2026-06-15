@@ -7,6 +7,14 @@
   <maintainer email="flashbot@todo.todo">flashbot</maintainer>
   <license>TODO: License declaration</license>
 
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>camera_ros</exec_depend>
+  <exec_depend>flashbot_behavior</exec_depend>
+  <exec_depend>flashbot_serial</exec_depend>
+  <exec_depend>flashbot_vision</exec_depend>
+  <exec_depend>web_video_server</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

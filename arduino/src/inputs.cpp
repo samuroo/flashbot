@@ -68,14 +68,22 @@ Events poll() {
   // Hall event
   noInterrupts();
   bool hall_left = hall_event_left;
+  uint32_t hall_left_us = hall_last_us_left;
   hall_event_left = false;
   interrupts();
-  if (hall_left) ev.hall_left = true;
+  if (hall_left) {
+    ev.hall_left = true;
+    ev.hall_left_us = hall_left_us;
+  }
   noInterrupts();
   bool hall_right = hall_event_right;
+  uint32_t hall_right_us = hall_last_us_right;
   hall_event_right = false;
   interrupts();
-  if (hall_right) ev.hall_right = true;
+  if (hall_right) {
+    ev.hall_right = true;
+    ev.hall_right_us = hall_right_us;
+  }
 
   // Limit event
   bool limit_reading_left = digitalRead(LIMIT_PIN_LEFT);
