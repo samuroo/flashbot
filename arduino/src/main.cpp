@@ -98,6 +98,8 @@ static void handle_drive_command(const String& command) {
 static void handle_command(const String& command) {
   if (command == "CMD,hello") {
     publish_event("ready");
+  } else if (command == "CMD,servo_status") {
+    Servo::reportStatus();
   } else if (command.startsWith("CMD,drive,")) {
     handle_drive_command(command);
   } else if (command.startsWith("CMD,wing_left,")) {

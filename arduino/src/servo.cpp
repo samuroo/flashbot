@@ -195,12 +195,7 @@ static void updateWalkingSync() {
 
 namespace Servo {
 
-void begin() {
-  Serial1.begin(1000000);
-  sc.pSerial = &Serial1;
-  delay(300);
-  servo_bus_ready = true;
-
+void reportStatus() {
   bool servo_found[4];
   for (uint8_t id = 0; id < 4; id++) {
     servo_found[id] = pingServo(id);
@@ -208,6 +203,15 @@ void begin() {
 
   configureLegServo(RIGHT_SERVO_ID, servo_found[RIGHT_SERVO_ID]);
   configureLegServo(LEFT_SERVO_ID, servo_found[LEFT_SERVO_ID]);
+}
+
+void begin() {
+  Serial1.begin(1000000);
+  sc.pSerial = &Serial1;
+  delay(300);
+  servo_bus_ready = true;
+
+  reportStatus();
   stop();
 }
 

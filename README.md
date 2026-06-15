@@ -284,6 +284,10 @@ Expected leg messages include `ping=ok`, `mode_after=3`, and `status=ready`.
 If an ID reports `ping=failed`, inspect that servo's configured ID, power, and
 serial-bus connection before testing movement.
 
+The serial node requests a fresh diagnostic report after every Arduino
+connection, so these messages do not depend on catching the Arduino boot
+output.
+
 ### Arduino command topics
 
 The serial bridge subscribes to:

@@ -44,6 +44,7 @@ class FlashbotSerialNode(Node):
         self.last_hello_sent = 0.0
         self.last_ready_received = 0.0
         self.arduino_ready = False
+        self.servo_status_requested = False
         self.hall_left_false_at = None
         self.hall_right_false_at = None
 
@@ -238,9 +239,11 @@ class FlashbotSerialNode(Node):
             if not self.arduino_ready:
                 self.get_logger().info("Arduino ready")
                 self.publish_ready(True)
+                self.request_servo_status()
         elif line == "EVT,boot":
             self.publish_ready(False)
             self.last_hello_sent = 0.0
+            self.servo_status_requested = False
             self.get_logger().info("Arduino booted")
         elif line == "EVT,aligned":
             self.publish_bool(self.aligned_pub, True)
@@ -316,6 +319,7 @@ class FlashbotSerialNode(Node):
             self.publish_ready(False)
             self.last_hello_sent = 0.0
             self.last_ready_received = 0.0
+            self.servo_status_requested = False
             self.get_logger().info(
                 f"Connected to Arduino on {self.port}; waiting for handshake"
             )
@@ -351,6 +355,12 @@ class FlashbotSerialNode(Node):
             self.get_logger().warn("Arduino heartbeat timed out")
             self.publish_ready(False)
 
+    def request_servo_status(self):
+        if self.servo_status_requested:
+            return
+        self.servo_status_requested = True
+        self.write_command("CMD,servo_status")
+
     def publish_ready(self, value):
         if self.arduino_ready == value and value:
             return
@@ -364,6 +374,7 @@ class FlashbotSerialNode(Node):
             except SerialException:
                 pass
         self.serial_handle = None
+        self.servo_status_requested = False
         self.publish_ready(False)
 
     def destroy_node(self):

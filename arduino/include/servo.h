@@ -4,6 +4,7 @@
 
 namespace Servo {
     void begin();
+    void reportStatus();
     void stop();
     void alignForward();
     void forward();
