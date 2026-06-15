@@ -7,8 +7,10 @@ namespace Servo {
     void reportStatus();
     void stop();
     void alignForward();
+    void alignBackward();
     void forward();
     void backward();
+    void backwardCounted();
     void turnLeft();
     void turnRight();
     void handleHallEvents(
@@ -18,6 +20,7 @@ namespace Servo {
         uint32_t right_us
     );
     bool consumeAligned();
+    bool consumeBackwardDone();
     bool consumeTurnDone();
     void setLeftSpeed(int16_t speed);
     void setRightSpeed(int16_t speed);

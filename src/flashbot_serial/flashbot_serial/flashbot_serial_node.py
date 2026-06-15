@@ -83,6 +83,11 @@ class FlashbotSerialNode(Node):
             "/flashbot/events/aligned",
             10,
         )
+        self.backward_done_pub = self.create_publisher(
+            Bool,
+            "/flashbot/events/backward_done",
+            10,
+        )
         self.turn_done_pub = self.create_publisher(
             Bool,
             "/flashbot/events/turn_done",
@@ -148,8 +153,10 @@ class FlashbotSerialNode(Node):
         valid_commands = {
             "STOP",
             "ALIGN_FORWARD",
+            "ALIGN_BACKWARD",
             "FORWARD",
             "BACKWARD",
+            "BACKWARD_COUNTED",
             "TURN_LEFT",
             "TURN_RIGHT",
         }
@@ -247,6 +254,8 @@ class FlashbotSerialNode(Node):
             self.get_logger().info("Arduino booted")
         elif line == "EVT,aligned":
             self.publish_bool(self.aligned_pub, True)
+        elif line == "EVT,backward_done":
+            self.publish_bool(self.backward_done_pub, True)
         elif line == "EVT,turn_done":
             self.publish_bool(self.turn_done_pub, True)
         elif line.startswith("EVT,servo,"):

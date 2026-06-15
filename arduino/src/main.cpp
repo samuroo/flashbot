@@ -83,10 +83,14 @@ static void handle_drive_command(const String& command) {
     Servo::stop();
   } else if (mode == "ALIGN_FORWARD") {
     Servo::alignForward();
+  } else if (mode == "ALIGN_BACKWARD") {
+    Servo::alignBackward();
   } else if (mode == "FORWARD") {
     Servo::forward();
   } else if (mode == "BACKWARD") {
     Servo::backward();
+  } else if (mode == "BACKWARD_COUNTED") {
+    Servo::backwardCounted();
   } else if (mode == "TURN_LEFT") {
     Servo::turnLeft();
   } else if (mode == "TURN_RIGHT") {
@@ -168,6 +172,9 @@ static void publish_input_events(const Events& ev) {
   }
   if (Servo::consumeAligned()) {
     publish_event("aligned");
+  }
+  if (Servo::consumeBackwardDone()) {
+    publish_event("backward_done");
   }
   if (Servo::consumeTurnDone()) {
     publish_event("turn_done");

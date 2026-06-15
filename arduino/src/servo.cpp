@@ -11,14 +11,17 @@ static const int16_t DRIVE_SPEED = 500;
 static const int16_t ALIGN_SPEED = 250;
 static const int16_t MAX_SYNC_CORRECTION = 125;
 static const int32_t SYNC_US_PER_SPEED_STEP = 100;
+static const uint8_t BACKWARD_HALL_TARGET = 2;
 static const uint8_t TURN_HALL_TARGET = 3;
 
 enum class DriveMode {
   STOP,
   MANUAL,
   ALIGN_FORWARD,
+  ALIGN_BACKWARD,
   FORWARD,
   BACKWARD,
+  BACKWARD_COUNTED,
   TURN_LEFT,
   TURN_RIGHT,
 };
@@ -35,6 +38,11 @@ static bool new_hall_right = false;
 static bool align_left_done = false;
 static bool align_right_done = false;
 static bool aligned_event = false;
+static uint8_t backward_left_count = 0;
+static uint8_t backward_right_count = 0;
+static bool backward_left_done = false;
+static bool backward_right_done = false;
+static bool backward_done_event = false;
 static uint8_t turn_left_count = 0;
 static uint8_t turn_right_count = 0;
 static bool turn_left_done = false;
@@ -166,6 +174,9 @@ static void applyWalkingSpeeds() {
   } else if (drive_mode == DriveMode::BACKWARD) {
     writeLeftSpeed(-left_drive_speed);
     writeRightSpeed(right_drive_speed);
+  } else if (drive_mode == DriveMode::BACKWARD_COUNTED) {
+    writeLeftSpeed(backward_left_done ? 0 : -left_drive_speed);
+    writeRightSpeed(backward_right_done ? 0 : right_drive_speed);
   }
 }
 
@@ -230,9 +241,29 @@ void alignForward() {
   writeRightSpeed(-ALIGN_SPEED);
 }
 
+void alignBackward() {
+  drive_mode = DriveMode::ALIGN_BACKWARD;
+  align_left_done = false;
+  align_right_done = false;
+  aligned_event = false;
+  writeLeftSpeed(-ALIGN_SPEED);
+  writeRightSpeed(ALIGN_SPEED);
+}
+
 void forward() {
   resetHallSync();
   drive_mode = DriveMode::FORWARD;
+  applyWalkingSpeeds();
+}
+
+void backwardCounted() {
+  resetHallSync();
+  backward_left_count = 0;
+  backward_right_count = 0;
+  backward_left_done = false;
+  backward_right_done = false;
+  backward_done_event = false;
+  drive_mode = DriveMode::BACKWARD_COUNTED;
   applyWalkingSpeeds();
 }
 
@@ -270,7 +301,8 @@ void handleHallEvents(
     bool right_event,
     uint32_t right_us
 ) {
-  if (drive_mode == DriveMode::ALIGN_FORWARD) {
+  if (drive_mode == DriveMode::ALIGN_FORWARD ||
+      drive_mode == DriveMode::ALIGN_BACKWARD) {
     if (left_event && !align_left_done) {
       writeLeftSpeed(0);
       align_left_done = true;
@@ -283,6 +315,34 @@ void handleHallEvents(
       drive_mode = DriveMode::STOP;
       aligned_event = true;
     }
+    return;
+  }
+
+  if (drive_mode == DriveMode::BACKWARD_COUNTED) {
+    if (left_event && !backward_left_done) {
+      last_hall_left_us = left_us;
+      new_hall_left = true;
+      backward_left_count++;
+      if (backward_left_count >= BACKWARD_HALL_TARGET) {
+        writeLeftSpeed(0);
+        backward_left_done = true;
+      }
+    }
+    if (right_event && !backward_right_done) {
+      last_hall_right_us = right_us;
+      new_hall_right = true;
+      backward_right_count++;
+      if (backward_right_count >= BACKWARD_HALL_TARGET) {
+        writeRightSpeed(0);
+        backward_right_done = true;
+      }
+    }
+    if (backward_left_done && backward_right_done) {
+      drive_mode = DriveMode::STOP;
+      backward_done_event = true;
+      return;
+    }
+    updateWalkingSync();
     return;
   }
 
@@ -328,6 +388,12 @@ void handleHallEvents(
 bool consumeAligned() {
   bool event = aligned_event;
   aligned_event = false;
+  return event;
+}
+
+bool consumeBackwardDone() {
+  bool event = backward_done_event;
+  backward_done_event = false;
   return event;
 }
 

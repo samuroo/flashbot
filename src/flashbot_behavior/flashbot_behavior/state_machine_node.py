@@ -14,6 +14,7 @@ class State(Enum):
     ALIGN_FORWARD = "ALIGN_FORWARD"
     WALK_FORWARD = "WALK_FORWARD"
     STOP = "STOP"
+    ALIGN_BACKWARD = "ALIGN_BACKWARD"
     WALK_BACKWARD = "WALK_BACKWARD"
     FLASH = "FLASH"
     TURN_AROUND = "TURN_AROUND"
@@ -26,7 +27,7 @@ class StateMachineNode(Node):
         super().__init__("state_machine_node")
 
         self.declare_parameter("walk_forward_sec", 3.0)
-        self.declare_parameter("walk_backward_sec", 2.0)
+        self.declare_parameter("backward_timeout_sec", 8.0)
         self.declare_parameter("wing_raise_sec", 0.3)
         self.declare_parameter("flash_sec", 0.5)
         self.declare_parameter("turn_timeout_sec", 8.0)
@@ -45,9 +46,10 @@ class StateMachineNode(Node):
         self.state_entered_at = time.monotonic()
         self.arduino_ready = False
         self.face_detected = False
-        self.face_triggered = False
+        self.face_armed = True
         self.face_bbox = None
         self.aligned = False
+        self.backward_done = False
         self.turn_done = False
         self.flutter_left = True
         self.flutter_active = False
@@ -87,6 +89,12 @@ class StateMachineNode(Node):
             Bool,
             "/flashbot/events/turn_done",
             self.turn_done_callback,
+            10,
+        )
+        self.create_subscription(
+            Bool,
+            "/flashbot/events/backward_done",
+            self.backward_done_callback,
             10,
         )
 
@@ -132,9 +140,9 @@ class StateMachineNode(Node):
         self.arduino_ready = msg.data
 
     def face_callback(self, msg):
-        if msg.data and not self.face_detected:
-            self.face_triggered = True
         self.face_detected = msg.data
+        if not msg.data:
+            self.face_armed = True
 
     def bbox_callback(self, msg):
         self.face_bbox = msg
@@ -147,6 +155,10 @@ class StateMachineNode(Node):
         if msg.data:
             self.turn_done = True
 
+    def backward_done_callback(self, msg):
+        if msg.data:
+            self.backward_done = True
+
     def update_state(self):
         if not self.arduino_ready:
             if self.state != State.IDLE:
@@ -157,16 +169,7 @@ class StateMachineNode(Node):
             return
 
         if self.state == State.IDLE:
-            if self.face_triggered:
-                self.face_triggered = False
-                self.enter_state(State.WALK_BACKWARD)
-            else:
-                self.enter_state(State.ALIGN_FORWARD)
-            return
-
-        if self.face_triggered:
-            self.face_triggered = False
-            self.enter_state(State.WALK_BACKWARD)
+            self.enter_state(State.ALIGN_FORWARD)
             return
 
         elapsed = time.monotonic() - self.state_entered_at
@@ -176,20 +179,38 @@ class StateMachineNode(Node):
                 self.enter_state(State.WALK_FORWARD)
             elif elapsed >= self.parameter("align_timeout_sec"):
                 self.get_logger().warn(
-                    "Leg alignment timed out; starting forward motion"
+                    "Initial leg alignment timed out; stopping"
                 )
-                self.enter_state(State.WALK_FORWARD)
+                self.enter_state(State.STOP)
 
         elif self.state == State.WALK_FORWARD:
             if elapsed >= self.parameter("walk_forward_sec"):
                 self.enter_state(State.STOP)
 
         elif self.state == State.STOP:
-            self.update_flutter()
+            if self.face_detected and self.face_armed:
+                self.face_armed = False
+                self.enter_state(State.ALIGN_BACKWARD)
+            else:
+                self.update_flutter()
+
+        elif self.state == State.ALIGN_BACKWARD:
+            if self.aligned:
+                self.enter_state(State.WALK_BACKWARD)
+            elif elapsed >= self.parameter("align_timeout_sec"):
+                self.get_logger().warn(
+                    "Backward alignment timed out; stopping"
+                )
+                self.enter_state(State.STOP)
 
         elif self.state == State.WALK_BACKWARD:
-            if elapsed >= self.parameter("walk_backward_sec"):
+            if self.backward_done:
                 self.enter_state(State.FLASH)
+            elif elapsed >= self.parameter("backward_timeout_sec"):
+                self.get_logger().warn(
+                    "Hall-counted backward motion timed out; stopping"
+                )
+                self.enter_state(State.STOP)
 
         elif self.state == State.FLASH:
             wing_raise_sec = self.parameter("wing_raise_sec")
@@ -225,6 +246,7 @@ class StateMachineNode(Node):
         self.state = state
         self.state_entered_at = time.monotonic()
         self.aligned = False
+        self.backward_done = False
         self.turn_done = False
         self.flutter_active = False
         self.flash_active = False
@@ -239,6 +261,10 @@ class StateMachineNode(Node):
             self.publish_drive("ALIGN_FORWARD")
         elif state == State.ALIGN_AFTER_TURN:
             self.publish_drive("ALIGN_FORWARD")
+        elif state == State.ALIGN_BACKWARD:
+            self.publish_flash(False)
+            self.publish_wings_at_rest()
+            self.publish_drive("ALIGN_BACKWARD")
         elif state in (State.WALK_FORWARD, State.ESCAPE_FORWARD):
             self.publish_drive("FORWARD")
         elif state == State.STOP:
@@ -248,7 +274,7 @@ class StateMachineNode(Node):
         elif state == State.WALK_BACKWARD:
             self.publish_flash(False)
             self.publish_wings_at_rest()
-            self.publish_drive("BACKWARD")
+            self.publish_drive("BACKWARD_COUNTED")
         elif state == State.FLASH:
             self.publish_drive("STOP")
             self.publish_wings(
