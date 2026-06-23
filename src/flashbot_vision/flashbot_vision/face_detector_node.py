@@ -47,7 +47,7 @@ class FaceDetectorNode(Node):
 
         results = self.model(
             frame,
-            conf=0.25,
+            conf=0.2,
             imgsz=320,
             device="cpu",
             verbose=False,
