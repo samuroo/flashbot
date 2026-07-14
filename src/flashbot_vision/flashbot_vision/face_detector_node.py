@@ -14,6 +14,7 @@ class FaceDetectorNode(Node):
 
         self.bridge = CvBridge()
         self.model = YOLO("yolov11n-face.pt")
+        self.latest_image_msg = None
 
         self.image_sub = self.create_subscription(
             Image,
@@ -40,9 +41,22 @@ class FaceDetectorNode(Node):
             1
         )
 
+        self.detection_timer = self.create_timer(
+            0.2,
+            self.detect_latest_face
+        )
+
         self.get_logger().info("Face detector node started")
 
     def image_callback(self, msg):
+        self.latest_image_msg = msg
+
+    def detect_latest_face(self):
+        msg = self.latest_image_msg
+        if msg is None:
+            return
+
+        self.latest_image_msg = None
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
         results = self.model(
