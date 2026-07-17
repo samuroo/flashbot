@@ -229,11 +229,11 @@ class StateMachineNode(Node):
         elif self.state == State.ALIGN_AFTER_TURN:
             if self.aligned:
                 self.enter_state(State.ESCAPE_FORWARD)
-            elif elapsed >= self.align_timeout_sec:
-                self.get_logger().warn(
-                    "Post-turn alignment timed out; stopping"
-                )
-                self.enter_state(State.STOP)
+            # elif elapsed >= self.align_timeout_sec:
+            #     self.get_logger().warn(
+            #         "Post-turn alignment timed out; stopping"
+            #     )
+            #     self.enter_state(State.STOP)
 
         elif self.state == State.ESCAPE_FORWARD:
             if elapsed >= self.escape_forward_sec:
