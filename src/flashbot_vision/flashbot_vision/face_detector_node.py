@@ -58,6 +58,7 @@ class FaceDetectorNode(Node):
 
         self.latest_image_msg = None
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        frame = frame[::-1, ::-1]
 
         results = self.model(
             frame,
