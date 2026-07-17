@@ -26,7 +26,7 @@ class StateMachineNode(Node):
     def __init__(self):
         super().__init__("state_machine_node")
 
-        self.walk_forward_sec = 3.0  # Seconds to walk forward before stopping.
+        self.walk_forward_sec = 0.0  # Seconds to walk forward before stopping.
         self.backward_timeout_sec = 8.0  # Max seconds for counted backward walk.
         self.wing_raise_sec = 0.3  # Seconds to wait after raising wings before flash.
         self.flash_sec = 0.5  # Seconds to keep the flash on.
@@ -187,8 +187,7 @@ class StateMachineNode(Node):
         elif self.state == State.STOP:
             if self.face_detected and self.face_armed:
                 self.face_armed = False
-                # self.enter_state(State.ALIGN_BACKWARD)
-                self.enter_state(State.WALK_BACKWARD)
+                self.enter_state(State.ALIGN_BACKWARD)
             else:
                 self.update_flutter()
 
@@ -220,11 +219,11 @@ class StateMachineNode(Node):
         elif self.state == State.TURN_AROUND:
             if self.turn_done:
                 self.enter_state(State.ALIGN_AFTER_TURN)
-            elif elapsed >= self.turn_timeout_sec:
-                self.get_logger().warn(
-                    "Turn timed out; stopping"
-                )
-                self.enter_state(State.STOP)
+            # elif elapsed >= self.turn_timeout_sec:
+            #     self.get_logger().warn(
+            #         "Turn timed out; stopping"
+            #     )
+            #     self.enter_state(State.STOP)
 
         elif self.state == State.ALIGN_AFTER_TURN:
             if self.aligned:

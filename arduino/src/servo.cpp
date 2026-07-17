@@ -9,8 +9,6 @@ static const int16_t MAX_WALK_SPEED = 1500;
 static const uint16_t MAX_WING_SPEED = 1500;
 static const int16_t DRIVE_SPEED = 400;
 static const int16_t ALIGN_SPEED = 400;
-static const int16_t MAX_SYNC_CORRECTION = 125;
-static const int32_t SYNC_US_PER_SPEED_STEP = 100;
 static const uint8_t BACKWARD_HALL_TARGET = 1;
 static const uint8_t TURN_HALL_TARGET = 2;
 
@@ -31,10 +29,6 @@ static bool servo_bus_ready = false;
 static DriveMode drive_mode = DriveMode::STOP;
 static int16_t left_drive_speed = DRIVE_SPEED;
 static int16_t right_drive_speed = DRIVE_SPEED;
-static uint32_t last_hall_left_us = 0;
-static uint32_t last_hall_right_us = 0;
-static bool new_hall_left = false;
-static bool new_hall_right = false;
 static bool align_left_done = false;
 static bool align_right_done = false;
 static bool aligned_event = false;
@@ -161,10 +155,6 @@ static void writeRightSpeed(int16_t speed) {
 static void resetHallSync() {
   left_drive_speed = DRIVE_SPEED;
   right_drive_speed = DRIVE_SPEED;
-  last_hall_left_us = 0;
-  last_hall_right_us = 0;
-  new_hall_left = false;
-  new_hall_right = false;
 }
 
 static void applyWalkingSpeeds() {
@@ -178,30 +168,6 @@ static void applyWalkingSpeeds() {
     writeLeftSpeed(backward_left_done ? 0 : -left_drive_speed);
     writeRightSpeed(backward_right_done ? 0 : right_drive_speed);
   }
-}
-
-static void updateWalkingSync() {
-  if (!new_hall_left || !new_hall_right) {
-    return;
-  }
-
-  int32_t phase_error_us = static_cast<int32_t>(
-      last_hall_left_us - last_hall_right_us
-  );
-  int32_t correction = phase_error_us / SYNC_US_PER_SPEED_STEP;
-  if (correction > MAX_SYNC_CORRECTION) {
-    correction = MAX_SYNC_CORRECTION;
-  } else if (correction < -MAX_SYNC_CORRECTION) {
-    correction = -MAX_SYNC_CORRECTION;
-  }
-
-  // A positive error means the left magnet arrived later, so speed up left.
-  left_drive_speed = DRIVE_SPEED + correction;
-  right_drive_speed = DRIVE_SPEED - correction;
-  applyWalkingSpeeds();
-
-  new_hall_left = false;
-  new_hall_right = false;
 }
 
 namespace Servo {
@@ -320,8 +286,6 @@ void handleHallEvents(
 
   if (drive_mode == DriveMode::BACKWARD_COUNTED) {
     if (left_event && !backward_left_done) {
-      last_hall_left_us = left_us;
-      new_hall_left = true;
       backward_left_count++;
       if (backward_left_count >= BACKWARD_HALL_TARGET) {
         writeLeftSpeed(0);
@@ -329,8 +293,6 @@ void handleHallEvents(
       }
     }
     if (right_event && !backward_right_done) {
-      last_hall_right_us = right_us;
-      new_hall_right = true;
       backward_right_count++;
       if (backward_right_count >= BACKWARD_HALL_TARGET) {
         writeRightSpeed(0);
@@ -342,7 +304,6 @@ void handleHallEvents(
       backward_done_event = true;
       return;
     }
-    updateWalkingSync();
     return;
   }
 
@@ -373,16 +334,6 @@ void handleHallEvents(
       drive_mode != DriveMode::BACKWARD) {
     return;
   }
-
-  if (left_event) {
-    last_hall_left_us = left_us;
-    new_hall_left = true;
-  }
-  if (right_event) {
-    last_hall_right_us = right_us;
-    new_hall_right = true;
-  }
-  updateWalkingSync();
 }
 
 bool consumeAligned() {
