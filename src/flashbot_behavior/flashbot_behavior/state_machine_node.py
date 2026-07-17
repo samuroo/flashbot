@@ -32,7 +32,7 @@ class StateMachineNode(Node):
         self.flash_sec = 0.5  # Seconds to keep the flash on.
         self.turn_timeout_sec = 8.0  # Max seconds to wait for turn completion.
         self.escape_forward_sec = 3.0  # Seconds to walk away after turning.
-        self.align_timeout_sec = 5.0  # Max seconds to wait for leg alignment.
+        # self.align_timeout_sec = 5.0  # Max seconds to wait for leg alignment.
         self.flutter_period_sec = 1.0  # Seconds between idle wing flutters.
         self.flutter_hold_sec = 0.25  # Seconds to hold each flutter movement.
         self.wing_speed = 1000  # Speed used for wing servo position commands.
@@ -174,11 +174,11 @@ class StateMachineNode(Node):
         if self.state == State.ALIGN_FORWARD:
             if self.aligned:
                 self.enter_state(State.WALK_FORWARD)
-            elif elapsed >= self.align_timeout_sec:
-                self.get_logger().warn(
-                    "Initial leg alignment timed out; stopping"
-                )
-                self.enter_state(State.STOP)
+            # elif elapsed >= self.align_timeout_sec:
+            #     self.get_logger().warn(
+            #         "Initial leg alignment timed out; stopping"
+            #     )
+            #     self.enter_state(State.STOP)
 
         elif self.state == State.WALK_FORWARD:
             if elapsed >= self.walk_forward_sec:
@@ -187,18 +187,19 @@ class StateMachineNode(Node):
         elif self.state == State.STOP:
             if self.face_detected and self.face_armed:
                 self.face_armed = False
-                self.enter_state(State.ALIGN_BACKWARD)
+                # self.enter_state(State.ALIGN_BACKWARD)
+                self.enter_state(State.WALK_BACKWARD)
             else:
                 self.update_flutter()
 
         elif self.state == State.ALIGN_BACKWARD:
             if self.aligned:
                 self.enter_state(State.WALK_BACKWARD)
-            elif elapsed >= self.align_timeout_sec:
-                self.get_logger().warn(
-                    "Backward alignment timed out; stopping"
-                )
-                self.enter_state(State.STOP)
+            # elif elapsed >= self.align_timeout_sec:
+            #     self.get_logger().warn(
+            #         "Backward alignment timed out; stopping"
+            #     )
+            #     self.enter_state(State.STOP)
 
         elif self.state == State.WALK_BACKWARD:
             if self.backward_done:
