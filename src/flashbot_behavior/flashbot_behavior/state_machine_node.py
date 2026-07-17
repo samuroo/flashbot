@@ -31,7 +31,7 @@ class StateMachineNode(Node):
         self.wing_raise_sec = 0.3  # Seconds to wait after raising wings before flash.
         self.flash_sec = 0.5  # Seconds to keep the flash on.
         self.turn_timeout_sec = 8.0  # Max seconds to wait for turn completion.
-        self.escape_forward_sec = 3.0  # Seconds to walk away after turning.
+        self.escape_forward_sec = 4.0  # Seconds to walk away after turning.
         # self.align_timeout_sec = 5.0  # Max seconds to wait for leg alignment.
         self.flutter_period_sec = 1.0  # Seconds between idle wing flutters.
         self.flutter_hold_sec = 0.25  # Seconds to hold each flutter movement.
@@ -51,6 +51,9 @@ class StateMachineNode(Node):
         self.aligned = False
         self.backward_done = False
         self.turn_done = False
+        self.left_bumper_pressed = False
+        self.right_bumper_pressed = False
+        self.bumper_escape_active = False
         self.flutter_left = True
         self.flutter_active = False
         self.flash_active = False
@@ -95,6 +98,18 @@ class StateMachineNode(Node):
             Bool,
             "/flashbot/events/backward_done",
             self.backward_done_callback,
+            10,
+        )
+        self.create_subscription(
+            Bool,
+            "/flashbot/events/limit_left",
+            self.left_bumper_callback,
+            10,
+        )
+        self.create_subscription(
+            Bool,
+            "/flashbot/events/limit_right",
+            self.right_bumper_callback,
             10,
         )
 
@@ -156,6 +171,12 @@ class StateMachineNode(Node):
         if msg.data:
             self.backward_done = True
 
+    def left_bumper_callback(self, msg):
+        self.left_bumper_pressed = msg.data
+
+    def right_bumper_callback(self, msg):
+        self.right_bumper_pressed = msg.data
+
     def update_state(self):
         if not self.arduino_ready:
             if self.state != State.IDLE:
@@ -193,8 +214,11 @@ class StateMachineNode(Node):
 
         elif self.state == State.ALIGN_BACKWARD:
             if self.aligned:
-                # self.enter_state(State.WALK_BACKWARD)
-                self.enter_state(State.FLASH)
+                if self.bumper_escape_active:
+                    self.enter_state(State.TURN_AROUND)
+                else:
+                    # self.enter_state(State.WALK_BACKWARD)
+                    self.enter_state(State.FLASH)
             # elif elapsed >= self.align_timeout_sec:
             #     self.get_logger().warn(
             #         "Backward alignment timed out; stopping"
@@ -219,8 +243,12 @@ class StateMachineNode(Node):
 
         elif self.state == State.TURN_AROUND:
             if self.turn_done:
-                # self.enter_state(State.ALIGN_AFTER_TURN)
-                self.enter_state(State.ESCAPE_FORWARD)
+                if self.bumper_escape_active:
+                    self.bumper_escape_active = False
+                    self.enter_state(State.STOP)
+                else:
+                    # self.enter_state(State.ALIGN_AFTER_TURN)
+                    self.enter_state(State.ESCAPE_FORWARD)
             # elif elapsed >= self.turn_timeout_sec:
             #     self.get_logger().warn(
             #         "Turn timed out; stopping"
@@ -237,7 +265,10 @@ class StateMachineNode(Node):
             #     self.enter_state(State.STOP)
 
         elif self.state == State.ESCAPE_FORWARD:
-            if elapsed >= self.escape_forward_sec:
+            if self.left_bumper_pressed or self.right_bumper_pressed:
+                self.bumper_escape_active = True
+                self.enter_state(State.ALIGN_BACKWARD)
+            elif elapsed >= self.escape_forward_sec:
                 self.enter_state(State.STOP)
 
     def enter_state(self, state):
