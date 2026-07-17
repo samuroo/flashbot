@@ -26,21 +26,21 @@ class StateMachineNode(Node):
     def __init__(self):
         super().__init__("state_machine_node")
 
-        self.declare_parameter("walk_forward_sec", 3.0)
-        self.declare_parameter("backward_timeout_sec", 8.0)
-        self.declare_parameter("wing_raise_sec", 0.3)
-        self.declare_parameter("flash_sec", 0.5)
-        self.declare_parameter("turn_timeout_sec", 8.0)
-        self.declare_parameter("escape_forward_sec", 3.0)
-        self.declare_parameter("align_timeout_sec", 5.0)
-        self.declare_parameter("flutter_period_sec", 1.0)
-        self.declare_parameter("flutter_hold_sec", 0.25)
-        self.declare_parameter("wing_speed", 1000)
-        self.declare_parameter("left_wing_rest", 1000)
-        self.declare_parameter("right_wing_rest", 50)
-        self.declare_parameter("left_wing_open", 700)
-        self.declare_parameter("right_wing_open", 350)
-        self.declare_parameter("wing_flutter_units", 20)
+        self.walk_forward_sec = 3.0  # Seconds to walk forward before stopping.
+        self.backward_timeout_sec = 8.0  # Max seconds for counted backward walk.
+        self.wing_raise_sec = 0.3  # Seconds to wait after raising wings before flash.
+        self.flash_sec = 0.5  # Seconds to keep the flash on.
+        self.turn_timeout_sec = 8.0  # Max seconds to wait for turn completion.
+        self.escape_forward_sec = 3.0  # Seconds to walk away after turning.
+        self.align_timeout_sec = 5.0  # Max seconds to wait for leg alignment.
+        self.flutter_period_sec = 1.0  # Seconds between idle wing flutters.
+        self.flutter_hold_sec = 0.25  # Seconds to hold each flutter movement.
+        self.wing_speed = 1000  # Speed used for wing servo position commands.
+        self.left_wing_rest = 1000  # Left wing resting servo position.
+        self.right_wing_rest = 50  # Right wing resting servo position.
+        self.left_wing_open = 700  # Left wing open position for flash.
+        self.right_wing_open = 350  # Right wing open position for flash.
+        self.wing_flutter_units = 20  # Servo position offset for idle flutter.
 
         self.state = State.IDLE
         self.state_entered_at = time.monotonic()
@@ -133,9 +133,6 @@ class StateMachineNode(Node):
         self.publish_state()
         self.get_logger().info("State machine started in IDLE")
 
-    def parameter(self, name):
-        return self.get_parameter(name).value
-
     def ready_callback(self, msg):
         self.arduino_ready = msg.data
 
@@ -177,14 +174,14 @@ class StateMachineNode(Node):
         if self.state == State.ALIGN_FORWARD:
             if self.aligned:
                 self.enter_state(State.WALK_FORWARD)
-            elif elapsed >= self.parameter("align_timeout_sec"):
+            elif elapsed >= self.align_timeout_sec:
                 self.get_logger().warn(
                     "Initial leg alignment timed out; stopping"
                 )
                 self.enter_state(State.STOP)
 
         elif self.state == State.WALK_FORWARD:
-            if elapsed >= self.parameter("walk_forward_sec"):
+            if elapsed >= self.walk_forward_sec:
                 self.enter_state(State.STOP)
 
         elif self.state == State.STOP:
@@ -197,7 +194,7 @@ class StateMachineNode(Node):
         elif self.state == State.ALIGN_BACKWARD:
             if self.aligned:
                 self.enter_state(State.WALK_BACKWARD)
-            elif elapsed >= self.parameter("align_timeout_sec"):
+            elif elapsed >= self.align_timeout_sec:
                 self.get_logger().warn(
                     "Backward alignment timed out; stopping"
                 )
@@ -206,24 +203,23 @@ class StateMachineNode(Node):
         elif self.state == State.WALK_BACKWARD:
             if self.backward_done:
                 self.enter_state(State.FLASH)
-            elif elapsed >= self.parameter("backward_timeout_sec"):
+            elif elapsed >= self.backward_timeout_sec:
                 self.get_logger().warn(
                     "Hall-counted backward motion timed out; stopping"
                 )
                 self.enter_state(State.STOP)
 
         elif self.state == State.FLASH:
-            wing_raise_sec = self.parameter("wing_raise_sec")
-            if not self.flash_active and elapsed >= wing_raise_sec:
+            if not self.flash_active and elapsed >= self.wing_raise_sec:
                 self.publish_flash(True)
                 self.flash_active = True
-            if elapsed >= wing_raise_sec + self.parameter("flash_sec"):
+            if elapsed >= self.wing_raise_sec + self.flash_sec:
                 self.enter_state(State.TURN_AROUND)
 
         elif self.state == State.TURN_AROUND:
             if self.turn_done:
                 self.enter_state(State.ALIGN_AFTER_TURN)
-            elif elapsed >= self.parameter("turn_timeout_sec"):
+            elif elapsed >= self.turn_timeout_sec:
                 self.get_logger().warn(
                     "Turn timed out; stopping"
                 )
@@ -232,14 +228,14 @@ class StateMachineNode(Node):
         elif self.state == State.ALIGN_AFTER_TURN:
             if self.aligned:
                 self.enter_state(State.ESCAPE_FORWARD)
-            elif elapsed >= self.parameter("align_timeout_sec"):
+            elif elapsed >= self.align_timeout_sec:
                 self.get_logger().warn(
                     "Post-turn alignment timed out; stopping"
                 )
                 self.enter_state(State.STOP)
 
         elif self.state == State.ESCAPE_FORWARD:
-            if elapsed >= self.parameter("escape_forward_sec"):
+            if elapsed >= self.escape_forward_sec:
                 self.enter_state(State.STOP)
 
     def enter_state(self, state):
@@ -278,8 +274,8 @@ class StateMachineNode(Node):
         elif state == State.FLASH:
             self.publish_drive("STOP")
             self.publish_wings(
-                self.parameter("left_wing_open"),
-                self.parameter("right_wing_open"),
+                self.left_wing_open,
+                self.right_wing_open,
             )
             self.publish_flash(False)
         elif state == State.TURN_AROUND:
@@ -293,25 +289,26 @@ class StateMachineNode(Node):
 
     def update_flutter(self):
         now = time.monotonic()
-        flutter_period = self.parameter("flutter_period_sec")
-        flutter_hold = self.parameter("flutter_hold_sec")
 
         if self.flutter_active:
-            if now - self.last_flutter_at >= flutter_hold:
+            if now - self.last_flutter_at >= self.flutter_hold_sec:
                 self.publish_wings_at_rest()
                 self.flutter_active = False
             return
 
-        if now - self.last_flutter_at < flutter_period:
+        if now - self.last_flutter_at < self.flutter_period_sec:
             return
 
-        left_rest = self.parameter("left_wing_rest")
-        right_rest = self.parameter("right_wing_rest")
-        flutter_units = self.parameter("wing_flutter_units")
         if self.flutter_left:
-            self.publish_wings(left_rest - flutter_units, right_rest)
+            self.publish_wings(
+                self.left_wing_rest - self.wing_flutter_units,
+                self.right_wing_rest,
+            )
         else:
-            self.publish_wings(left_rest, right_rest + flutter_units)
+            self.publish_wings(
+                self.left_wing_rest,
+                self.right_wing_rest + self.wing_flutter_units,
+            )
 
         self.flutter_left = not self.flutter_left
         self.flutter_active = True
@@ -333,12 +330,12 @@ class StateMachineNode(Node):
 
     def publish_wings_at_rest(self):
         self.publish_wings(
-            self.parameter("left_wing_rest"),
-            self.parameter("right_wing_rest"),
+            self.left_wing_rest,
+            self.right_wing_rest,
         )
 
     def publish_wings(self, left_position, right_position):
-        speed = int(self.parameter("wing_speed"))
+        speed = int(self.wing_speed)
 
         left_msg = Int32MultiArray()
         left_msg.data = [int(left_position), speed]
