@@ -53,7 +53,10 @@ class StateMachineNode(Node):
         self.turn_done = False
         self.left_bumper_pressed = False
         self.right_bumper_pressed = False
+        self.bumper_armed = True
         self.bumper_escape_active = False
+        self.bumper_turn_active = False
+        self.bumper_turn_direction = None
         self.flutter_left = True
         self.flutter_active = False
         self.flash_active = False
@@ -191,6 +194,9 @@ class StateMachineNode(Node):
             return
 
         elapsed = time.monotonic() - self.state_entered_at
+        bumper_pressed = self.left_bumper_pressed or self.right_bumper_pressed
+        if not bumper_pressed:
+            self.bumper_armed = True
 
         if self.state == State.ALIGN_FORWARD:
             if self.aligned:
@@ -206,7 +212,17 @@ class StateMachineNode(Node):
                 self.enter_state(State.STOP)
 
         elif self.state == State.STOP:
-            if self.face_detected and self.face_armed:
+            if self.bumper_armed and self.left_bumper_pressed:
+                self.bumper_armed = False
+                self.bumper_turn_active = True
+                self.bumper_turn_direction = "TURN_LEFT"
+                self.enter_state(State.TURN_AROUND)
+            elif self.bumper_armed and self.right_bumper_pressed:
+                self.bumper_armed = False
+                self.bumper_turn_active = True
+                self.bumper_turn_direction = "TURN_RIGHT"
+                self.enter_state(State.TURN_AROUND)
+            elif self.face_detected and self.face_armed:
                 self.face_armed = False
                 self.enter_state(State.ALIGN_BACKWARD)
             else:
@@ -243,7 +259,11 @@ class StateMachineNode(Node):
 
         elif self.state == State.TURN_AROUND:
             if self.turn_done:
-                if self.bumper_escape_active:
+                if self.bumper_turn_active:
+                    self.bumper_turn_active = False
+                    self.bumper_turn_direction = None
+                    self.enter_state(State.STOP)
+                elif self.bumper_escape_active:
                     self.bumper_escape_active = False
                     self.enter_state(State.STOP)
                 else:
@@ -265,7 +285,8 @@ class StateMachineNode(Node):
             #     self.enter_state(State.STOP)
 
         elif self.state == State.ESCAPE_FORWARD:
-            if self.left_bumper_pressed or self.right_bumper_pressed:
+            if self.bumper_armed and bumper_pressed:
+                self.bumper_armed = False
                 self.bumper_escape_active = True
                 self.enter_state(State.ALIGN_BACKWARD)
             elif elapsed >= self.escape_forward_sec:
@@ -314,7 +335,9 @@ class StateMachineNode(Node):
         elif state == State.TURN_AROUND:
             self.publish_flash(False)
             self.publish_wings_at_rest()
-            direction = random.choice(("TURN_LEFT", "TURN_RIGHT"))
+            direction = self.bumper_turn_direction
+            if direction is None:
+                direction = random.choice(("TURN_LEFT", "TURN_RIGHT"))
             self.publish_drive(direction)
 
         self.publish_state()
