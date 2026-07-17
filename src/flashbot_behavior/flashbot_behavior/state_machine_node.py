@@ -26,7 +26,7 @@ class StateMachineNode(Node):
     def __init__(self):
         super().__init__("state_machine_node")
 
-        self.walk_forward_sec = 0.0  # Seconds to walk forward before stopping.
+        self.walk_forward_sec = .0  # Seconds to walk forward before stopping.
         # self.backward_timeout_sec = 8.0  # Max seconds for counted backward walk.
         self.wing_raise_sec = 0.3  # Seconds to wait after raising wings before flash.
         self.flash_sec = 0.5  # Seconds to keep the flash on.
