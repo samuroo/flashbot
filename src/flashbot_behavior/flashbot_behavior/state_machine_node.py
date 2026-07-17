@@ -26,12 +26,12 @@ class StateMachineNode(Node):
     def __init__(self):
         super().__init__("state_machine_node")
 
-        self.walk_forward_sec = .0  # Seconds to walk forward before stopping.
+        self.walk_forward_sec = 2.0  # Seconds to walk forward before stopping.
         # self.backward_timeout_sec = 8.0  # Max seconds for counted backward walk.
         self.wing_raise_sec = 0.3  # Seconds to wait after raising wings before flash.
         self.flash_sec = 0.5  # Seconds to keep the flash on.
         self.turn_timeout_sec = 8.0  # Max seconds to wait for turn completion.
-        self.escape_forward_sec = 2.0  # Seconds to walk away after turning.
+        self.escape_forward_sec = 3.0  # Seconds to walk away after turning.
         # self.align_timeout_sec = 5.0  # Max seconds to wait for leg alignment.
         self.flutter_period_sec = 1.0  # Seconds between idle wing flutters.
         self.flutter_hold_sec = 0.25  # Seconds to hold each flutter movement.
@@ -193,7 +193,8 @@ class StateMachineNode(Node):
 
         elif self.state == State.ALIGN_BACKWARD:
             if self.aligned:
-                self.enter_state(State.WALK_BACKWARD)
+                # self.enter_state(State.WALK_BACKWARD)
+                self.enter_state(State.FLASH)
             # elif elapsed >= self.align_timeout_sec:
             #     self.get_logger().warn(
             #         "Backward alignment timed out; stopping"
