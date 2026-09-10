@@ -23,7 +23,7 @@ class StateMachineNode(Node):
     def __init__(self):
         super().__init__("state_machine_node")
 
-        self.walk_forward_sec = 2.0         # Seconds to walk forward before stopping.
+        self.walk_forward_sec = 4.0         # Seconds to walk forward before stopping.
         self.wing_raise_sec = 0.3           # Seconds to wait after raising wings before flash.
         self.flash_sec = 0.5                # Seconds to keep the flash on.
         self.wing_speed = 1000              # Speed used for wing servo position commands.
@@ -176,13 +176,13 @@ class StateMachineNode(Node):
         # align backward
         elif self.state == State.ALIGN_BACKWARD:
             # hall effects are lined up
-            if self.aligned:
+            # if self.aligned:
                 # needs to align backward before turning around
-                if self.turn_from_walk_forward:
-                    self.enter_state(State.TURN_AROUND)
-                # move onto rasing wings
-                else:
-                    self.enter_state(State.RAISE_WINGS)
+            if self.turn_from_walk_forward:
+                self.enter_state(State.TURN_AROUND)
+            # move onto rasing wings
+            else:
+                self.enter_state(State.RAISE_WINGS)
 
         # raise wings
         elif self.state == State.RAISE_WINGS:
