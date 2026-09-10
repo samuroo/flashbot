@@ -26,7 +26,6 @@ Connect to network
 sudo nmcli device wifi connect "WIFI_NAME" password "WIFI_PASSWORD"
 ```
 
-
 ## Raspberry Pi setup
 
 These instructions assume this repository is cloned to `~/flashbot` and ROS 2
@@ -65,6 +64,44 @@ source ~/flashbot/install/setup.bash
 ```
 
 To do this automatically, add those two lines to `~/.bashrc`.
+
+## Changes to flashbot PI (10/09/2026)
+```bash
+sudo nano /etc/systemd/system/flashbot.service
+```
+```bash
+[Unit]
+Description=Flashbot ROS 2 Bringup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=flashbot
+WorkingDirectory=/home/flashbot/flashbot_ws
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && source /home/flashbot/flashbot_ws/install/setup.bash && source /home/flashbot/flashbot-venv/bin/activate && ros2 launch flashbot_bringup flashbot.launch.py'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+``` bash
+sudo systemctl daemon-reload
+sudo systemctl enable flashbot.service
+sudo systemctl start flashbot.service
+```
+
+To stop it for any reason... like debugging.
+```bash
+sudo systemctl stop flashbot.service
+```
+
+Live LOG feed
+```bash
+journalctl -u flashbot.service -f
+```
 
 ### Check the camera
 

@@ -13,6 +13,7 @@ class State(Enum):
     ALIGN_FORWARD = "ALIGN_FORWARD"
     WALK_FORWARD = "WALK_FORWARD"
     STOP = "STOP"
+    RANDOM_BACKWARD = "RANDOM_BACKWARD"
     ALIGN_BACKWARD = "ALIGN_BACKWARD"
     FLASH = "FLASH"
     TURN_AROUND = "TURN_AROUND"
@@ -43,6 +44,9 @@ class StateMachineNode(Node):
         self.turn_from_walk_forward = False
         self.turn_from_stop = False
         self.turn_from_stop_direction = None
+        self.stop_wait_sec = 0.0
+        self.backward_done = False
+        self.backward_segments_done = 0
 
         ready_qos = QoSProfile(
             depth=1,
@@ -112,6 +116,12 @@ class StateMachineNode(Node):
             10,
         )
         self.timer = self.create_timer(0.05, self.update_state)
+        self.create_subscription(
+            Bool,
+            "/flashbot/events/backward_done",
+            self.backward_done_callback,
+            10,
+        )
         self.publish_state()
         self.get_logger().info("State machine started in IDLE")
 
@@ -128,6 +138,10 @@ class StateMachineNode(Node):
     def turn_done_callback(self, msg):
         if msg.data:
             self.turn_done = True
+
+    def backward_done_callback(self, msg):
+        if msg.data and self.state == State.RANDOM_BACKWARD:
+            self.backward_done = True
 
     def left_bumper_callback(self, msg):
         self.left_bumper_pressed = msg.data
@@ -172,6 +186,19 @@ class StateMachineNode(Node):
             # if face detected
             elif self.face_detected:
                 self.enter_state(State.ALIGN_BACKWARD)
+
+            elif elapsed >= self.stop_wait_sec:
+                self.enter_state(State.RANDOM_BACKWARD)
+
+        elif self.state == State.RANDOM_BACKWARD:
+            if self.backward_done:
+                self.backward_done = False
+                self.backward_segments_done += 1
+                if self.backward_segments_done >= 2:
+                    self.enter_state(State.STOP)
+                else:
+                    # Existing firmware stops after one Hall event per leg.
+                    self.publish_drive("BACKWARD_COUNTED")
 
         # align backward
         elif self.state == State.ALIGN_BACKWARD:
@@ -243,8 +270,14 @@ class StateMachineNode(Node):
         elif state == State.WALK_FORWARD:
             self.publish_drive("FORWARD")
         elif state == State.STOP:
+            self.stop_wait_sec = random.uniform(5.0, 10.0)
             self.publish_drive("STOP")
             self.publish_wings_at_rest()
+        elif state == State.RANDOM_BACKWARD:
+            self.backward_done = False
+            self.backward_segments_done = 0
+            self.publish_wings_at_rest()
+            self.publish_drive("BACKWARD_COUNTED")
         elif state == State.RAISE_WINGS:
             self.publish_drive("STOP")
             self.publish_wings(self.left_wing_open, self.right_wing_open)
