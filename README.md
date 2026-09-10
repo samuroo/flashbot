@@ -6,6 +6,27 @@ the motors, wings, lights, hall sensors, and limit switches.
 
 Showcased at Highlight Delft 2026 and Maker Faire Delft 2026.
 
+## PIs
+Username: flashbot / flashbot-1
+Password: flashbot
+
+SSH
+```bash
+ssh flashbot-1@flashbot-1
+```
+
+## See WiFi
+List WiFi
+```bash
+nmcli device wifi list
+```
+
+Connect to network
+```bash
+sudo nmcli device wifi connect "WIFI_NAME" password "WIFI_PASSWORD"
+```
+
+
 ## Raspberry Pi setup
 
 These instructions assume this repository is cloned to `~/flashbot` and ROS 2
@@ -177,8 +198,8 @@ The vision launch exposes the following interfaces:
 | --- | --- | --- | --- |
 | `/camera_node/image_raw` | `sensor_msgs/msg/Image` | Camera publishes | Raw camera frames |
 | `/face_detected` | `std_msgs/msg/Bool` | Vision publishes | Whether at least one face is visible |
-| `/face_bbox` | `sensor_msgs/msg/RegionOfInterest` | Vision publishes | First face bounding box, or all zeros when no face is visible |
-| `/face_bbox_image` | `sensor_msgs/msg/Image` | Vision publishes | Camera frame with the first detected face outlined |
+| `/face_bbox` | `sensor_msgs/msg/RegionOfInterest` | Vision publishes | Highest-confidence face bounding box, or all zeros when no face is visible |
+| `/face_bbox_image` | `sensor_msgs/msg/Image` | Vision publishes | Camera frame with the highest-confidence detected face outlined |
 
 Inspect face detection and bounding-box messages:
 
@@ -206,35 +227,42 @@ ros2 run flashbot_behavior state_machine_node
 ```
 
 It waits in `IDLE` until `/flashbot/arduino_ready` confirms a live serial
-heartbeat. It then aligns both legs at their next hall-sensor crossing, walks
-forward briefly, and enters `STOP`, where the wings flutter gently.
-If startup alignment does not finish within five seconds, the robot stops
-instead of beginning forward motion with an unknown leg phase.
+heartbeat. It then aligns both legs at their next hall-sensor crossing and
+enters `STOP` with the wings at rest.
 
 The face-response sequence is:
 
 ```text
-STOP -> ALIGN_BACKWARD -> WALK_BACKWARD -> FLASH -> TURN_AROUND
--> ALIGN_AFTER_TURN -> ESCAPE_FORWARD -> STOP
+STOP -> ALIGN_BACKWARD -> RAISE_WINGS -> FLASH -> TURN_AROUND
+-> WALK_FORWARD -> STOP
 ```
 
 Face detection triggers this sequence only while the robot is in `STOP`.
 Detections during startup, alignment, walking, flashing, or turning are
 ignored. A face that is already visible when the robot enters `STOP` triggers
-the sequence immediately. One continuous detection causes only one response;
-the detector must report `false` before the behavior is armed again.
+the sequence immediately. If a face remains visible when the robot returns to
+`STOP`, it immediately starts the sequence again.
 
-Before retreating, Flashbot aligns both legs backward at their next hall
-events. The retreat then counts two hall events independently for each leg
-instead of using a timer. After turning, Flashbot aligns both legs forward
-before walking again. Alignment, retreat, and turn timeouts send it to `STOP`
-instead of continuing with uncertain leg phase.
+Before flashing, Flashbot aligns both legs backward at their next hall events.
+It raises its wings, waits 0.3 seconds, flashes for 0.5 seconds, and then turns
+in a randomly selected direction. Each leg stops independently after two hall
+events during the turn. Flashbot then walks forward for two seconds before
+returning to `STOP`.
+
+The limit switches also affect behavior. In `STOP`, the left switch starts a
+left turn and the right switch starts a right turn. During `WALK_FORWARD`,
+either switch causes Flashbot to align backward, turn again, and return to
+`STOP`. A switch that remains pressed can trigger again when Flashbot returns
+to a state that handles bumper input.
+
+The current state machine does not enforce alignment or turn timeouts. Keep the
+robot supervised and use a manual `STOP` command if a hall event is missed or a
+movement does not complete.
 
 Watch its state and low-level drive commands:
 
 ```bash
 ros2 topic echo /flashbot/state
-ros2 topic echo /flashbot_command
 ros2 topic echo /flashbot/cmd/drive
 ```
 
@@ -242,8 +270,6 @@ Simulate a detected face without running the camera:
 
 ```bash
 ros2 topic pub --once /face_detected std_msgs/msg/Bool "{data: true}"
-ros2 topic pub --once /face_bbox sensor_msgs/msg/RegionOfInterest \
-  "{x_offset: 100, y_offset: 80, height: 200, width: 200, do_rectify: false}"
 ```
 
 Return the state machine to its normal state:
@@ -252,9 +278,8 @@ Return the state machine to its normal state:
 ros2 topic pub --once /face_detected std_msgs/msg/Bool "{data: false}"
 ```
 
-`/flashbot_command` remains as a compatibility/debug output. The behavior node
-drives the robot through `/flashbot/cmd/drive`, the wing command topics, and
-`/flashbot/cmd/flash`.
+The behavior node drives the robot through `/flashbot/cmd/drive`, the wing
+command topics, and `/flashbot/cmd/flash`.
 
 ## Arduino serial bridge
 
@@ -312,36 +337,34 @@ The serial bridge subscribes to:
 | `/flashbot/cmd/servo_right` | `std_msgs/msg/Int32` | Walking motor speed |
 | `/flashbot/cmd/flash` | `std_msgs/msg/Bool` | `true` turns the flash on |
 
-### Hall synchronization
+### Hall-based movement
 
 The hall sensors are configured as `INPUT_PULLUP` inputs with falling-edge
 interrupts. A hall message therefore represents a brief magnet-crossing event,
-not a persistent high state. The synchronization logic runs on the Arduino so
-it can use the original microsecond timestamps instead of ROS message timing.
+not a persistent high state. The Arduino records the event time in
+microseconds and applies a 2 ms guard against duplicate triggers. The current
+movement logic uses the events for alignment and movement counting; it does not
+currently adjust walking speeds from the recorded timestamps.
 
 The current algorithm works as follows:
 
-- `ALIGN_FORWARD` moves both legs forward at speed `250`. Each leg stops
+- `ALIGN_FORWARD` moves both legs forward at speed `400`. Each leg stops
   independently when its own hall sensor detects the next magnet crossing.
   After both legs have stopped, the Arduino publishes
   `/flashbot/events/aligned`.
 - `ALIGN_BACKWARD` performs the same independent alignment while moving both
-  legs backward at speed `250`.
-- `FORWARD` and continuous `BACKWARD` start both legs at speed `500`. After receiving a
-  new event from each hall sensor, the Arduino compares their timestamps and
-  adjusts the two speeds in opposite directions.
-- `BACKWARD_COUNTED` starts at speed `500`, applies the same synchronization,
-  and counts hall events independently. Each leg stops after two events. When
+  legs backward at speed `400`.
+- `FORWARD` and continuous `BACKWARD` run both legs at speed `400`. Hall events
+  are published but do not currently alter the motor speeds in these modes.
+- `BACKWARD_COUNTED` starts at speed `400` and counts hall events independently.
+  Each leg stops after one event. When
   both have stopped, the Arduino publishes
   `/flashbot/events/backward_done`.
-- Walking corrections are limited to `125` speed units above or below the base
-  speed. A positive timestamp error speeds up the left leg and slows down the
-  right leg; a negative error does the opposite.
 - `TURN_LEFT` and `TURN_RIGHT` count hall events independently for each leg.
-  Each leg stops after three events. When both have stopped, the Arduino
+  Each leg stops after two events. When both have stopped, the Arduino
   publishes `/flashbot/events/turn_done`.
 
-The speeds, correction gain, and three-event turn distance are experimental.
+The speeds and two-event turn distance are experimental.
 They will likely need tuning on the physical robot. Always lift or securely
 support Flashbot for the first test, keep clear of the mechanisms, and have the
 `STOP` command ready in another terminal.
@@ -393,8 +416,8 @@ ros2 topic pub --once /flashbot/cmd/drive std_msgs/msg/String \
   "{data: STOP}"
 ```
 
-Test the automatic two-event backward retreat. It should stop without a
-separate `STOP` after both legs complete two hall events:
+Test the automatic one-event backward retreat. It should stop without a
+separate `STOP` after both legs complete one hall event:
 
 ```bash
 ros2 topic pub --once /flashbot/cmd/drive std_msgs/msg/String \
@@ -402,7 +425,7 @@ ros2 topic pub --once /flashbot/cmd/drive std_msgs/msg/String \
 ```
 
 Test each turn separately. A turn should stop automatically after each leg
-records three hall events, but use `STOP` immediately if the motion is wrong:
+records two hall events, but use `STOP` immediately if the motion is wrong:
 
 ```bash
 ros2 topic pub --once /flashbot/cmd/drive std_msgs/msg/String \
@@ -461,7 +484,7 @@ The serial bridge publishes:
 | --- | --- | --- |
 | `/flashbot/arduino_ready` | `std_msgs/msg/Bool` | Latched serial heartbeat status |
 | `/flashbot/events/aligned` | `std_msgs/msg/Bool` | Both legs reached their forward or backward hall alignment point |
-| `/flashbot/events/backward_done` | `std_msgs/msg/Bool` | Both legs completed the two-event counted retreat |
+| `/flashbot/events/backward_done` | `std_msgs/msg/Bool` | Both legs completed the one-event counted retreat |
 | `/flashbot/events/turn_done` | `std_msgs/msg/Bool` | Both legs completed the configured hall-counted turn |
 | `/flashbot/servo_status` | `std_msgs/msg/String` | Servo ping and leg PWM-mode diagnostics |
 | `/flashbot/events/hall_left` | `std_msgs/msg/Bool` | Short pulse from the left hall sensor |
@@ -469,7 +492,7 @@ The serial bridge publishes:
 | `/flashbot/events/limit_left` | `std_msgs/msg/Bool` | Left limit switch pressed or released |
 | `/flashbot/events/limit_right` | `std_msgs/msg/Bool` | Right limit switch pressed or released |
 
-Monitor all four in separate terminals, or inspect one at a time:
+Monitor all five in separate terminals, or inspect one at a time:
 
 ```bash
 ros2 topic echo /flashbot/events/hall_left
