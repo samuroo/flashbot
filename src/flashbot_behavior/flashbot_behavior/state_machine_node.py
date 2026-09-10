@@ -270,7 +270,7 @@ class StateMachineNode(Node):
         elif state == State.WALK_FORWARD:
             self.publish_drive("FORWARD")
         elif state == State.STOP:
-            self.stop_wait_sec = random.uniform(5.0, 10.0)
+            self.stop_wait_sec = random.uniform(15.0, 30.0)
             self.publish_drive("STOP")
             self.publish_wings_at_rest()
         elif state == State.RANDOM_BACKWARD:
