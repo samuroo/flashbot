@@ -7,6 +7,8 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Int32, Int32MultiArray, String
 
+from sensor_msgs.msg import RegionOfInterest
+
 
 class State(Enum):
     IDLE = "IDLE"
@@ -24,7 +26,7 @@ class StateMachineNode(Node):
         super().__init__("state_machine_node")
 
         self.drive_speed = 400             # Signed PWM magnitude for walking and turning.
-        self.hall_ignore_sec = 0.2          # Ignore initial crossings after starting movement.
+        self.hall_ignore_sec = 0.5          # Ignore initial crossings after starting movement.
         self.wing_raise_sec = 0.3           # Seconds to wait after raising wings before flash.
         self.flash_sec = 0.5                # Seconds to keep the flash on.
         self.wing_speed = 1000              # Speed used for wing servo position commands.
@@ -32,6 +34,9 @@ class StateMachineNode(Node):
         self.right_wing_rest = 50           # Right wing resting servo position.
         self.left_wing_open = 700           # Left wing open position for flash.
         self.right_wing_open = 350          # Right wing open position for flash.
+
+        self.min_face_width = 50
+        self.min_face_height = 100
 
         self.state = State.IDLE
         self.state_entered_at = time.monotonic()
@@ -43,7 +48,7 @@ class StateMachineNode(Node):
         self.stop_wait_sec = 0.0
         self.after_walk = State.STOP
         self.turn_direction = "TURN_LEFT"
-        self.turn_hall_target = 2
+        self.turn_hall_target = 1
         self.hall_target = 0
         self.hall_counts = [0, 0]
         self.hall_count_after = 0.0
@@ -59,10 +64,16 @@ class StateMachineNode(Node):
             self.ready_callback,
             ready_qos,
         )
+        # self.create_subscription(
+        #     Bool,
+        #     "/face_detected",
+        #     self.face_callback,
+        #     1,
+        # )
         self.create_subscription(
-            Bool,
-            "/face_detected",
-            self.face_callback,
+            RegionOfInterest,
+            "/face_bbox",
+            self.face_bbox_callback,
             1,
         )
         self.create_subscription(
@@ -134,8 +145,13 @@ class StateMachineNode(Node):
     def ready_callback(self, msg):
         self.arduino_alive = msg.data
 
-    def face_callback(self, msg):
-        self.face_detected = msg.data
+    # def face_callback(self, msg):
+    #     self.face_detected = msg.data
+    def face_bbox_callback(self, msg):
+        self.face_detected = (
+            msg.width >= self.min_face_width
+            and msg.height >= self.min_face_height
+        )
 
     def aligned_callback(self, msg):
         if msg.data:
