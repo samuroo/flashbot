@@ -270,37 +270,42 @@ enters `STOP` with the wings at rest.
 The face-response sequence is:
 
 ```text
-STOP -> ALIGN_BACKWARD -> RAISE_WINGS -> FLASH -> TURN_AROUND
--> WALK_FORWARD -> STOP
+STOP -> WALK_BACKWARD -> RAISE_WINGS -> FLASH -> TURN_AROUND -> STOP
 ```
 
-Face detection triggers this sequence only while the robot is in `STOP`.
-Detections during startup, alignment, walking, flashing, or turning are
-ignored. A face that is already visible when the robot enters `STOP` triggers
-the sequence immediately. If a face remains visible when the robot returns to
-`STOP`, it immediately starts the sequence again.
+In `STOP`, bumper input takes priority over face detection, then random movement.
+A face starts a backward walk of one Hall event per leg, followed by raising the
+wings for 0.3 seconds, flashing for 0.5 seconds, and a random left/right turn of
+two Hall events per leg. The turn returns directly to `STOP`.
 
-Before flashing, Flashbot aligns both legs backward at their next hall events.
-It raises its wings, waits 0.3 seconds, flashes for 0.5 seconds, and then turns
-in a randomly selected direction. Each leg stops independently after two hall
-events during the turn. Flashbot then walks forward for two seconds before
-returning to `STOP`.
+In `STOP`, the left bumper starts a left turn and the right bumper starts a
+right turn, each for one Hall event per leg. After a random wait of 15?30
+seconds, the robot randomly chooses a forward walk, backward walk, or turn,
+all for one Hall event per leg, then returns to `STOP`. Random turns choose
+left or right. A face or bumper still active on returning to `STOP` can trigger
+another response. Face and bumper inputs only trigger movement in `STOP`.
 
-The limit switches also affect behavior. In `STOP`, the left switch starts a
-left turn and the right switch starts a right turn. During `WALK_FORWARD`,
-either switch causes Flashbot to align backward, turn again, and return to
-`STOP`. A switch that remains pressed can trigger again when Flashbot returns
-to a state that handles bumper input.
+The Pi sends individual leg speed commands and counts each `True` message on
+`/flashbot/events/hall_left` and `/flashbot/events/hall_right`. Each leg stops
+independently when it reaches its target. `False` messages are ignored.
+Only startup alignment uses the Arduino's `ALIGN_FORWARD` drive command.
 
-The current state machine does not enforce alignment or turn timeouts. Keep the
-robot supervised and use a manual `STOP` command if a hall event is missed or a
-movement does not complete.
+For testing, edit `drive_speed` (default 400) and `hall_ignore_sec` (default
+0.2 seconds) near the top of `state_machine_node.py`. Every counted movement
+ignores initial Hall events during this interval, so reversing past the nearby
+magnet does not immediately count as a completed rotation. Tune this interval
+on the robot: it must cover the initial re-crossing without hiding the next
+full rotation. Timing uses event arrival at the Pi; the serial messages have
+no sensor timestamps. No movement timeouts are implemented.
 
-Watch its state and low-level drive commands:
+Watch the state, individual motor commands, and Hall events:
 
 ```bash
 ros2 topic echo /flashbot/state
-ros2 topic echo /flashbot/cmd/drive
+ros2 topic echo /flashbot/cmd/servo_left
+ros2 topic echo /flashbot/cmd/servo_right
+ros2 topic echo /flashbot/events/hall_left
+ros2 topic echo /flashbot/events/hall_right
 ```
 
 Simulate a detected face without running the camera:
@@ -315,8 +320,9 @@ Return the state machine to its normal state:
 ros2 topic pub --once /face_detected std_msgs/msg/Bool "{data: false}"
 ```
 
-The behavior node drives the robot through `/flashbot/cmd/drive`, the wing
-command topics, and `/flashbot/cmd/flash`.
+The behavior node drives the legs through `/flashbot/cmd/servo_left` and
+`/flashbot/cmd/servo_right`, with `/flashbot/cmd/drive` used only for startup
+alignment. It also uses the wing command topics and `/flashbot/cmd/flash`.
 
 ## Arduino serial bridge
 
@@ -383,7 +389,9 @@ microseconds and applies a 2 ms guard against duplicate triggers. The current
 movement logic uses the events for alignment and movement counting; it does not
 currently adjust walking speeds from the recorded timestamps.
 
-The current algorithm works as follows:
+The Arduino still supports the following legacy drive commands for manual
+tests. The Pi behavior node uses only `ALIGN_FORWARD` from this list; walking
+and turning are counted on the Pi as described above:
 
 - `ALIGN_FORWARD` moves both legs forward at speed `400`. Each leg stops
   independently when its own hall sensor detects the next magnet crossing.
