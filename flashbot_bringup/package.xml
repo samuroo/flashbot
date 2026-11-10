@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>flashbot_bringup</name>
+  <version>0.0.0</version>
+  <description>Launch files for Flashbot.</description>
+  <maintainer email="flashbot-1@todo.todo">flashbot-1</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>camera_ros</exec_depend>
+  <exec_depend>web_video_server</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
