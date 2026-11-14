@@ -5,7 +5,7 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import UInt8
-from std_srvs.srv import Trigger
+from std_srvs.srv import SetBool
 
 
 class LedNode(Node):
@@ -25,8 +25,7 @@ class LedNode(Node):
                 raise RuntimeError(f'gpiochip{chip} is not the Pi 5 RP1 controller')
             lgpio.gpio_claim_output(self.gpio_handle, self.PIN, 0)
             self.claimed = True
-            self.create_service(Trigger, '/led/on', self.on)
-            self.create_service(Trigger, '/led/off', self.off)
+            self.create_service(SetBool, '/led/set', self.set_led)
             self.create_subscription(UInt8, '/led/brightness', self.brightness, 1)
         except Exception:
             self.close_gpio()
@@ -45,7 +44,7 @@ class LedNode(Node):
             lgpio.gpio_write(self.gpio_handle, self.PIN, int(value == 255))
             return
         if not self.pwm_available:
-            raise RuntimeError('PWM unavailable; use /led/on or /led/off')
+            raise RuntimeError('PWM unavailable; use /led/set for ON/OFF')
         try:
             lgpio.tx_pwm(self.gpio_handle, self.PIN, self.PWM_HZ, value * 100.0 / 255)
             self.pwm_active = True
@@ -55,17 +54,11 @@ class LedNode(Node):
             lgpio.gpio_write(self.gpio_handle, self.PIN, 0)
             raise RuntimeError('PWM failed; LED OFF. ON/OFF still available') from exc
 
-    def on(self, request, response):
-        return self.switch(255, response)
-
-    def off(self, request, response):
-        return self.switch(0, response)
-
-    def switch(self, value, response):
+    def set_led(self, request, response):
         try:
-            self.set_brightness(value)
+            self.set_brightness(255 if request.data else 0)
             response.success = True
-            response.message = 'LED ON' if value else 'LED OFF'
+            response.message = 'LED ON' if request.data else 'LED OFF'
         except (lgpio.error, RuntimeError) as exc:
             response.success = False
             response.message = str(exc)

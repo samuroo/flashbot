@@ -54,12 +54,14 @@ In another terminal, source ROS and the workspace, then control the LED:
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/flashbot_ws/install/setup.bash
-ros2 service call /led/on std_srvs/srv/Trigger "{}"
-ros2 service call /led/off std_srvs/srv/Trigger "{}"
+ros2 service call /led/set std_srvs/srv/SetBool "{data: true}"   # ON
+ros2 service call /led/set std_srvs/srv/SetBool "{data: false}"  # OFF
 ros2 topic pub --once /led/brightness std_msgs/msg/UInt8 "{data: 128}"
 ```
 
-Brightness: `0` = OFF, `255` = fully ON. Uses 500 Hz software PWM; if PWM
+`/led/set`: `true` = fully ON, `false` = OFF. `/led/brightness`: `0` = OFF,
+`255` = fully ON, `128` = about half brightness. The latest command takes effect.
+Uses 500 Hz software PWM; if PWM
 fails, the node logs an error and keeps ON/OFF control available. Stop with
 `Ctrl+C`. The external pull-down holds the gate LOW after GPIO is released.
 

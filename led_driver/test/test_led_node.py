@@ -44,7 +44,7 @@ class TestLedNode(unittest.TestCase):
             'std_msgs': MagicMock(),
             'std_msgs.msg': SimpleNamespace(UInt8=object),
             'std_srvs': MagicMock(),
-            'std_srvs.srv': SimpleNamespace(Trigger=object),
+            'std_srvs.srv': SimpleNamespace(SetBool=object),
         }
         path = Path(__file__).parents[1] / 'led_driver' / 'led_node.py'
         spec = importlib.util.spec_from_file_location('led_node_under_test', path)
@@ -71,10 +71,10 @@ class TestLedNode(unittest.TestCase):
         node = self.module.LedNode()
         node.brightness(SimpleNamespace(data=128))
         self.gpio.tx_pwm.assert_called_with(7, 13, 500, 128 * 100.0 / 255)
-        self.assertTrue(node.on(None, SimpleNamespace()).success)
+        self.assertTrue(node.set_led(SimpleNamespace(data=True), SimpleNamespace()).success)
         self.gpio.tx_pwm.assert_called_with(7, 13, 0, 0)
         self.gpio.gpio_write.assert_called_with(7, 13, 1)
-        self.assertTrue(node.off(None, SimpleNamespace()).success)
+        self.assertTrue(node.set_led(SimpleNamespace(data=False), SimpleNamespace()).success)
         self.gpio.gpio_write.assert_called_with(7, 13, 0)
 
     def test_pwm_failure_preserves_switching(self):
@@ -83,13 +83,13 @@ class TestLedNode(unittest.TestCase):
         node.brightness(SimpleNamespace(data=128))
         self.assertFalse(node.pwm_available)
         self.gpio.gpio_write.assert_called_with(7, 13, 0)
-        self.assertTrue(node.on(None, SimpleNamespace()).success)
-        self.assertTrue(node.off(None, SimpleNamespace()).success)
+        self.assertTrue(node.set_led(SimpleNamespace(data=True), SimpleNamespace()).success)
+        self.assertTrue(node.set_led(SimpleNamespace(data=False), SimpleNamespace()).success)
 
     def test_service_reports_gpio_failure(self):
         node = self.module.LedNode()
         self.gpio.gpio_write.side_effect = self.gpio.error('write failed')
-        self.assertFalse(node.on(None, SimpleNamespace()).success)
+        self.assertFalse(node.set_led(SimpleNamespace(data=True), SimpleNamespace()).success)
 
     def test_shutdown_stops_pwm_then_lowers_and_releases_pin(self):
         node = self.module.LedNode()
