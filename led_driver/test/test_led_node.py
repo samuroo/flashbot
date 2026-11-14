@@ -50,7 +50,7 @@ class TestLedNode(unittest.TestCase):
     def test_startup_off(self):
         node = self.module.LedNode()
         self.assertEqual(node.name, 'led_node')
-        self.gpio.gpio_claim_output.assert_called_once_with(7, 12, 0)
+        self.gpio.gpio_claim_output.assert_called_once_with(7, 13, 0)
         self.gpio.tx_pwm.assert_not_called()
 
     def test_wrong_chip_is_released_without_claiming_pin(self):
@@ -63,19 +63,19 @@ class TestLedNode(unittest.TestCase):
     def test_pwm_and_services(self):
         node = self.module.LedNode()
         node.brightness(SimpleNamespace(data=128))
-        self.gpio.tx_pwm.assert_called_with(7, 12, 500, 128 * 100.0 / 255)
+        self.gpio.tx_pwm.assert_called_with(7, 13, 500, 128 * 100.0 / 255)
         self.assertTrue(node.on(None, SimpleNamespace()).success)
-        self.gpio.tx_pwm.assert_called_with(7, 12, 0, 0)
-        self.gpio.gpio_write.assert_called_with(7, 12, 1)
+        self.gpio.tx_pwm.assert_called_with(7, 13, 0, 0)
+        self.gpio.gpio_write.assert_called_with(7, 13, 1)
         self.assertTrue(node.off(None, SimpleNamespace()).success)
-        self.gpio.gpio_write.assert_called_with(7, 12, 0)
+        self.gpio.gpio_write.assert_called_with(7, 13, 0)
 
     def test_pwm_failure_preserves_switching(self):
         node = self.module.LedNode()
         self.gpio.tx_pwm.side_effect = self.gpio.error('not supported')
         node.brightness(SimpleNamespace(data=128))
         self.assertFalse(node.pwm_available)
-        self.gpio.gpio_write.assert_called_with(7, 12, 0)
+        self.gpio.gpio_write.assert_called_with(7, 13, 0)
         self.assertTrue(node.on(None, SimpleNamespace()).success)
         self.assertTrue(node.off(None, SimpleNamespace()).success)
 
@@ -90,8 +90,8 @@ class TestLedNode(unittest.TestCase):
         self.gpio.reset_mock()
         node.close_gpio()
         self.assertEqual(self.gpio.mock_calls, [
-            call.tx_pwm(7, 12, 0, 0), call.gpio_write(7, 12, 0),
-            call.gpio_free(7, 12), call.gpiochip_close(7),
+            call.tx_pwm(7, 13, 0, 0), call.gpio_write(7, 13, 0),
+            call.gpio_free(7, 13), call.gpiochip_close(7),
         ])
         node.close_gpio()  # Repeated cleanup must not touch released resources.
         self.gpio.gpiochip_close.assert_called_once()
@@ -101,8 +101,8 @@ class TestLedNode(unittest.TestCase):
         node.set_brightness(128)
         self.gpio.tx_pwm.side_effect = self.gpio.error('stop failed')
         node.close_gpio()
-        self.gpio.gpio_write.assert_called_with(7, 12, 0)
-        self.gpio.gpio_free.assert_called_once_with(7, 12)
+        self.gpio.gpio_write.assert_called_with(7, 13, 0)
+        self.gpio.gpio_free.assert_called_once_with(7, 13)
         self.gpio.gpiochip_close.assert_called_once_with(7)
 
 

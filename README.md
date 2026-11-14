@@ -1,5 +1,19 @@
 # Flashbot V2 README
 
+## Build and source
+
+Run on the Pi, outside the Python virtual environment. Build all workspace packages:
+
+```bash
+source /opt/ros/jazzy/setup.bash && cd ~/flashbot_ws && colcon build --symlink-install
+```
+
+Source in each new terminal (and again after building):
+
+```bash
+source /opt/ros/jazzy/setup.bash && source ~/flashbot_ws/install/setup.bash && source ~/camera_ws/install/local_setup.bash
+```
+
 ## Pi overview
 
 - Hostname: `flashbot-1`
@@ -17,15 +31,17 @@ Python packages installed in the repository's `venv` on the Pi:
 
 ## LED
 
-`led_driver` runs `led_node`, controlling the MOSFET gate on **BCM GPIO 12
-(physical pin 32)**. The LED uses its separate 5 V supply, not GPIO power;
-the Pi and LED supply must share ground. Keep the 330 ohm gate resistor and
+`led_driver` runs `led_node`, controlling the MOSFET gate on **BCM GPIO 13
+(physical pin 33)**. The LED is powered from the Pi's 5 V supply pin;
+GPIO 13 only controls the MOSFET gate. The MOSFET source connects to Pi ground.
+Keep the 330 ohm gate resistor and
 100 kohm pull-down. Starts OFF and switches LOW on normal shutdown.
 
-Install and build on the Pi, outside the Python virtual environment:
+Installed GPIO support on the Pi with `sudo apt install python3-lgpio`.
+
+Build and run on the Pi, outside the Python virtual environment:
 
 ```bash
-sudo apt install python3-lgpio
 source /opt/ros/jazzy/setup.bash
 cd ~/flashbot_ws
 colcon build --symlink-install --packages-select led_driver

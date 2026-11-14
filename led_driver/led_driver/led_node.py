@@ -1,4 +1,4 @@
-"""Control a MOSFET gate on BCM GPIO 12; never power the LED from GPIO."""
+"""Control a MOSFET gate on BCM GPIO 13; never power the LED from GPIO."""
 
 import lgpio
 import rclpy
@@ -9,7 +9,7 @@ from std_srvs.srv import Trigger
 
 
 class LedNode(Node):
-    PIN = 12
+    PIN = 13
     PWM_HZ = 500
 
     def __init__(self):
@@ -32,7 +32,7 @@ class LedNode(Node):
             self.close_gpio()
             self.destroy_node()
             raise
-        self.get_logger().info(f'LED OFF; gpiochip{chip}, BCM 12, PWM 500 Hz')
+        self.get_logger().info(f'LED OFF; gpiochip{chip}, BCM 13, PWM 500 Hz')
 
     def stop_pwm(self):
         if self.pwm_active:
