@@ -20,6 +20,11 @@ class TestLedNode(unittest.TestCase):
             def __init__(self, name):
                 self.name = name
 
+            @property
+            def handle(self):
+                # rclpy owns this property; drivers must not assign to it.
+                return 'ros-node-handle'
+
             def declare_parameter(self, name, default):
                 return SimpleNamespace(value=default)
 
@@ -50,6 +55,8 @@ class TestLedNode(unittest.TestCase):
     def test_startup_off(self):
         node = self.module.LedNode()
         self.assertEqual(node.name, 'led_node')
+        self.assertEqual(node.handle, 'ros-node-handle')
+        self.assertEqual(node.gpio_handle, 7)
         self.gpio.gpio_claim_output.assert_called_once_with(7, 13, 0)
         self.gpio.tx_pwm.assert_not_called()
 
