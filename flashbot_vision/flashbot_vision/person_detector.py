@@ -38,6 +38,11 @@ class PersonDetector(Node):
         self.confidence = self.declare_parameter('confidence', 0.25).value
         if not 0.0 < self.confidence <= 1.0:
             raise ValueError('confidence must be in (0, 1]')
+
+        self.max_fps = float(self.declare_parameter('max_fps', 2.0).value)
+        if self.max_fps <= 0:
+            raise ValueError('max_fps must be positive')
+        
         topic = self.declare_parameter('image_topic', '/camera_node/image_raw').value
         self.model = YOLO(str(model_path), task='detect')
         self.bridge = CvBridge()
@@ -51,9 +56,11 @@ class PersonDetector(Node):
             QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.worker = threading.Thread(target=self.detect, name='person-inference')
         self.worker.start()
-        self.get_logger().info(f'NCNN CPU, 640x640, confidence={self.confidence}; {topic}')
+        self.get_logger().info(f'NCNN CPU, 256x256, max_fps={self.max_fps}, confidence={self.confidence}; {topic}')
 
     def receive(self, message):
+        last_start = 0.0
+
         # Overwrite the pending frame while inference runs; never enqueue frames.
         with self.condition:
             self.latest = (message, time.perf_counter())
@@ -104,10 +111,31 @@ class PersonDetector(Node):
                 time.sleep(1.0)
 
     def stop(self):
+        # with self.condition:
+        #     self.stopping = True
+        #     self.condition.notify()
+        # self.worker.join()
+
         with self.condition:
-            self.stopping = True
-            self.condition.notify()
-        self.worker.join()
+            self.condition.wait_for(
+                lambda: self.stopping or self.latest is not None
+            )
+            if self.stopping:
+                return
+
+        # Limit how frequently inference starts.
+        remaining = 1.0 / self.max_fps - (time.perf_counter() - last_start)
+        if remaining > 0:
+            time.sleep(remaining)
+
+        # Take the newest frame AFTER waiting.
+        with self.condition:
+            if self.stopping:
+                return
+            message, received = self.latest
+            self.latest = None
+
+        last_start = time.perf_counter()
 
 
 def main(args=None):

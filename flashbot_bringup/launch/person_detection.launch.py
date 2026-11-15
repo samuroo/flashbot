@@ -18,6 +18,7 @@ def generate_launch_description():
             home / 'flashbot_ws/models/yolo26n_ncnn_model')),
         DeclareLaunchArgument('image_topic', default_value='/camera_node/image_raw'),
         DeclareLaunchArgument('confidence', default_value='0.25'),
+        DeclareLaunchArgument('max_fps', default_value='2.0'),
         Node(
             package='flashbot_vision', executable='person_detector',
             name='person_detector', output='screen',
@@ -26,6 +27,7 @@ def generate_launch_description():
                 'model': LaunchConfiguration('model'),
                 'image_topic': LaunchConfiguration('image_topic'),
                 'confidence': ParameterValue(LaunchConfiguration('confidence'), value_type=float),
+                'max_fps': ParameterValue(LaunchConfiguration('max_fps'), value_type=float),
             }],
         ),
     ])
