@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlashBeetle interface</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='viewer.js') }}" defer></script>
+</head>
+<body>
+  <main>
+    <section class="camera-panel" aria-label="Camera preview">
+      <div class="preview" id="preview" data-video-port="{{ video_port }}" data-image-topic="{{ image_topic }}">
+        <span class="dot" id="dot" hidden aria-hidden="true"></span>
+        <button id="toggle" type="button" aria-pressed="false">Preview</button>
+        <span class="stream-error" id="stream-error" hidden>Camera stream unavailable</span>
+      </div>
+      <div class="metrics">
+        <span>FPS: <strong id="fps">—</strong></span>
+        <span>Person Detection FPS: <strong id="dfps">—</strong></span>
+      </div>
+    </section>
+    <aside>Space for later updates...</aside>
+  </main>
+</body>
+</html>

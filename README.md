@@ -29,6 +29,34 @@ source /opt/ros/jazzy/setup.bash && source ~/flashbot_ws/install/setup.bash && s
 Python packages installed in the repository's `venv` on the Pi:
 - `ftservo-python-sdk` — servo control.
 
+## Interface
+
+`flashbot_web` serves a small Flask page at **http://flashbot-1.local:5000**.
+Hover over the video area and click **Preview**; click **Stop Preview** to disconnect
+the video. A green dot marks the latest detected person's center and disappears
+when nobody is detected or results stop. Camera FPS and Person Detection FPS sit
+below the video; the right side is reserved for later updates.
+
+Install in the existing Pi venv:
+
+```bash
+source ~/flashbot_ws/src/flashbot/venv/bin/activate
+python -m pip install 'Flask>=3,<4' 'waitress>=3,<4'
+deactivate
+```
+
+Build and source using the commands at the top. With the camera and person
+detector running in their own terminals, start the interface:
+
+```bash
+ros2 launch flashbot_bringup interface.launch.py
+```
+
+This reuses the existing camera stream on port 8080. Stopping Preview leaves the
+camera and detector running. FPS measures received camera messages; Person
+Detection FPS measures completed detections, including frames without a person.
+Optional launch arguments: `port:=5000` and `video_port:=8080`.
+
 ## LED
 
 `led_driver` runs `led_node`, controlling the MOSFET gate on **BCM GPIO 13
