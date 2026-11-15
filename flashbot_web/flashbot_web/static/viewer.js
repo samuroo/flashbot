@@ -18,8 +18,7 @@ function connectStream() {
   const current = image;
   const url = new URL("/stream", window.location.href);
   url.port = preview.dataset.videoPort;
-  url.searchParams.set("topic", preview.dataset.imageTopic);
-  url.searchParams.set("type", "mjpeg");
+  url.search = `?topic=${preview.dataset.imageTopic}&type=mjpeg`;
   current.onerror = () => {
     if (image !== current || !playing) return;
     streamError.hidden = false;
