@@ -59,8 +59,6 @@ class PersonDetector(Node):
         self.get_logger().info(f'NCNN CPU, 256x256, max_fps={self.max_fps}, confidence={self.confidence}; {topic}')
 
     def receive(self, message):
-        last_start = 0.0
-
         # Overwrite the pending frame while inference runs; never enqueue frames.
         with self.condition:
             self.latest = (message, time.perf_counter())
@@ -68,42 +66,73 @@ class PersonDetector(Node):
 
     def detect(self):
         report_start = time.perf_counter()
+        last_start = 0.0
         count = 0
         inference_total = latency_total = 0.0
+
         while True:
             with self.condition:
-                self.condition.wait_for(lambda: self.stopping or self.latest is not None)
+                self.condition.wait_for(
+                    lambda: self.stopping or self.latest is not None
+                )
+                if self.stopping:
+                    return
+
+            # Limit inference FPS.
+            remaining = 1.0 / self.max_fps - (time.perf_counter() - last_start)
+            if remaining > 0:
+                time.sleep(remaining)
+
+            # Get the newest frame AFTER waiting.
+            with self.condition:
                 if self.stopping:
                     return
                 message, received = self.latest
                 self.latest = None
+
+            last_start = time.perf_counter()
+
             try:
-                frame = self.bridge.imgmsg_to_cv2(message, desired_encoding='bgr8')
+                frame = self.bridge.imgmsg_to_cv2(
+                    message, desired_encoding='bgr8'
+                )
+
                 started = time.perf_counter()
                 result = self.model.predict(
                     frame, imgsz=256, rect=False, conf=self.confidence,
-                    classes=[0], device='cpu', verbose=False)[0]
+                    classes=[0], device='cpu', verbose=False
+                )[0]
                 finished = time.perf_counter()
+
                 center = person_center(
-                    result.boxes.data.cpu().numpy(), message.width, message.height)
+                    result.boxes.data.cpu().numpy(),
+                    message.width, message.height
+                )
+
                 if self.stopping or not rclpy.ok():
                     return
+
                 self.detected_pub.publish(Bool(data=center is not None))
+
                 if center is not None:
                     self.position_pub.publish(Int32MultiArray(data=center))
+
                 count += 1
                 inference_total += finished - started
                 latency_total += finished - received
                 elapsed = finished - report_start
+
                 if elapsed >= 5.0:
                     self.get_logger().info(
                         f'person={center is not None} center={center} '
                         f'FPS={count / elapsed:.2f} '
                         f'inference={1000 * inference_total / count:.1f}ms '
-                        f'frame-to-result={1000 * latency_total / count:.1f}ms')
+                        f'frame-to-result={1000 * latency_total / count:.1f}ms'
+                    )
                     report_start = finished
                     count = 0
                     inference_total = latency_total = 0.0
+
             except Exception as exc:
                 if self.stopping or not rclpy.ok():
                     return
@@ -111,31 +140,10 @@ class PersonDetector(Node):
                 time.sleep(1.0)
 
     def stop(self):
-        # with self.condition:
-        #     self.stopping = True
-        #     self.condition.notify()
-        # self.worker.join()
-
         with self.condition:
-            self.condition.wait_for(
-                lambda: self.stopping or self.latest is not None
-            )
-            if self.stopping:
-                return
-
-        # Limit how frequently inference starts.
-        remaining = 1.0 / self.max_fps - (time.perf_counter() - last_start)
-        if remaining > 0:
-            time.sleep(remaining)
-
-        # Take the newest frame AFTER waiting.
-        with self.condition:
-            if self.stopping:
-                return
-            message, received = self.latest
-            self.latest = None
-
-        last_start = time.perf_counter()
+            self.stopping = True
+            self.condition.notify()
+        self.worker.join()
 
 
 def main(args=None):
