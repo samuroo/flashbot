@@ -74,7 +74,7 @@ class PersonDetector(Node):
                 frame = self.bridge.imgmsg_to_cv2(message, desired_encoding='bgr8')
                 started = time.perf_counter()
                 result = self.model.predict(
-                    frame, imgsz=640, rect=False, conf=self.confidence,
+                    frame, imgsz=320, rect=False, conf=self.confidence,
                     classes=[0], device='cpu', verbose=False)[0]
                 finished = time.perf_counter()
                 center = person_center(

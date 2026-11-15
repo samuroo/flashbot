@@ -56,7 +56,7 @@ async function updateStatus() {
     if (status.width > 0 && status.height > 0) {
       preview.style.aspectRatio = `${status.width} / ${status.height}`;
     }
-    if (playing && !status.camera_alive && !retryAt) retryAt = Date.now() + 3000;
+    // if (playing && !status.camera_alive && !retryAt) retryAt = Date.now() + 3000;
     if (playing && retryAt && Date.now() >= retryAt && status.camera_alive) connectStream();
     if (playing) streamError.hidden = status.camera_alive && !retryAt;
     const center = status.center;
