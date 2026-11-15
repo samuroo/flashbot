@@ -69,6 +69,71 @@ Defaults to `/dev/gpiochip4` (RP1 on this Pi), which your user already has
 access to through `dialout`. If the RP1 controller number changes, use
 `ros2 run led_driver led_node --ros-args -p gpiochip:=0` with its actual number.
 
+## Person Detection
+
+`flashbot_vision/person_detector` runs YOLO26n with NCNN on the CPU, independent
+of movement. It processes the latest camera frame at 640x640 and confidence 0.25.
+It detects people without requiring a visible head; partial-body detections are
+possible but not guaranteed. No extra camera process is created.
+
+- Subscribes: `/camera_node/image_raw` (`sensor_msgs/msg/Image`).
+- Publishes: `/person_detected` (`std_msgs/msg/Bool`) for every processed frame.
+- Publishes: `/person_position` (`std_msgs/msg/Int32MultiArray`), `[x, y]` center
+  of the highest-confidence person in original image pixels (origin: top-left).
+  No position is published when nobody is detected; use the Bool to invalidate
+  the previous position. No new results are published if camera frames stop.
+
+Dependencies on the Pi, using the existing system-site-packages venv. CPU-only
+PyTorch avoids CUDA downloads; NumPy/OpenCV constraints preserve ROS compatibility:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/flashbot_ws/src/flashbot/venv/bin/activate
+python -m pip install 'torch==2.15.0+cpu' 'torchvision==0.29.2+cpu' --index-url https://download.pytorch.org/whl/cpu
+python -m pip install 'numpy<2' 'opencv-python==4.11.0.86' 'ultralytics==8.4.213' 'ncnn==1.0.20261020' 'pnnx==20260526'
+```
+
+Download/export once ([official NCNN instructions](https://docs.ultralytics.com/integrations/ncnn/)):
+
+```bash
+mkdir -p ~/flashbot_ws/models
+cd ~/flashbot_ws/models
+python -c 'from ultralytics import YOLO; YOLO("yolo26n.pt").export(format="ncnn", imgsz=640, device="cpu")'
+deactivate
+cd ~/flashbot_ws
+colcon build --symlink-install --packages-select flashbot_vision flashbot_bringup
+source install/setup.bash
+```
+
+With the existing camera running (see Camera below), start the detector separately:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/flashbot_ws/install/setup.bash
+ros2 launch flashbot_bringup person_detection.launch.py
+```
+
+The launch file stays in `flashbot_bringup` and starts the node from `flashbot_vision`.
+It uses the existing venv's Python explicitly. Optional arguments:
+`confidence:=0.3`, `image_topic:=/camera_node/image_raw`, `model:=/path/to/ncnn_model`,
+`python:=/path/to/venv/bin/python`. Stop with `Ctrl+C`.
+
+Monitor in another sourced terminal (run each echo separately):
+
+```bash
+ros2 topic echo /person_detected
+ros2 topic echo /person_position
+```
+
+Every five seconds the node logs status, processed FPS, inference time, and latency
+from frame receipt to result (not sensor exposure time). Old pending frames are dropped.
+
+Tested on this Pi on 15 November 2026: live 640x480 camera, 640x640 inference,
+about **5 FPS** after warm-up, **194-200 ms inference**, **229-267 ms receipt-to-result**
+in steady intervals (brief dips to 2.6-3.7 FPS). Blank images, multiple people,
+and a headless crop passed ROS output checks; partial-body accuracy varies by scene.
+The system build still prints the existing `pytest-repeat` metadata warning.
+
 ## Camera
 
 Camera sensor is the IMX708, on CAM0. The packaged camera driver failed
